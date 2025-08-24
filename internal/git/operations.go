@@ -1,0 +1,125 @@
+package git
+
+import (
+	"bufio"
+	"os/exec"
+	"strings"
+)
+
+type GitRepo struct {
+	WorkDir string
+}
+
+func (repo *GitRepo) GetModifiedFiles() ([]string, error) {
+	cmd := exec.Command("git", "status", "--porcelain")
+	cmd.Dir = repo.WorkDir
+
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var files []string
+	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if len(line) > 3 {
+			files = append(files, strings.TrimSpace(line[2:]))
+		}
+	}
+
+	return files, nil
+}
+
+func (repo *GitRepo) AddFiles(files []string) error {
+	if len(files) == 0 {
+		return nil
+	}
+
+	args := append([]string{"add"}, files...)
+	cmd := exec.Command("git", args...)
+	cmd.Dir = repo.WorkDir
+
+	return cmd.Run()
+}
+
+func (repo *GitRepo) GetCurrentBranch() (string, error) {
+	cmd := exec.Command("git", "branch", "--show-current")
+	cmd.Dir = repo.WorkDir
+
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(string(output)), nil
+}
+
+func (repo *GitRepo) Fetch() error {
+	cmd := exec.Command("git", "fetch", "origin")
+	cmd.Dir = repo.WorkDir
+	return cmd.Run()
+}
+
+func (repo *GitRepo) PullLatestRemote(branch string) error {
+	cmd := exec.Command("git", "pull", "origin", branch)
+	cmd.Dir = repo.WorkDir
+	return cmd.Run()
+}
+
+func (repo *GitRepo) MergeLatest(branch string) error {
+	currentBranch, err := repo.GetCurrentBranch()
+	if err != nil {
+		return err
+	}
+
+	// Probably dont want to merge into main or master directly so just pull
+	if currentBranch == "main" || currentBranch == "master" {
+		cmd := exec.Command("git", "pull")
+		cmd.Dir = repo.WorkDir
+		return cmd.Run()
+	}
+
+	// Get latest from remote
+	err = repo.PullLatestRemote(branch)
+
+	if err != nil {
+		return err
+	}
+
+	// Merge remote into current
+	cmd := exec.Command("git", "merge", "origin/"+branch)
+	cmd.Dir = repo.WorkDir
+	return cmd.Run()
+}
+
+func (repo *GitRepo) Commit(message string) error {
+	cmd := exec.Command("git", "commit", "-m", message)
+	cmd.Dir = repo.WorkDir
+	return cmd.Run()
+}
+
+func (repo *GitRepo) Push() error {
+	currentBranch, err := repo.GetCurrentBranch()
+
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.Command("git", "push", "origin", currentBranch)
+	cmd.Dir = repo.WorkDir
+	return cmd.Run()
+}
+
+func (repo *GitRepo) IsClean() (bool, error) {
+	cmd := exec.Command("git", "status", "--porcelain")
+	cmd.Dir = repo.WorkDir
+
+	output, err := cmd.Output()
+	if err != nil {
+		return false, err
+	}
+
+	return len(output) == 0, nil
+}
