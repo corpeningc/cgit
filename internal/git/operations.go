@@ -2,6 +2,8 @@ package git
 
 import (
 	"bufio"
+	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -49,11 +51,13 @@ func (repo *GitRepo) AddFiles(files []string) error {
 }
 
 func (repo *GitRepo) GetCurrentBranch() (string, error) {
-	cmd := exec.Command("git", "branch", "--show-current")
+	cmd := exec.Command("git", "branch")
+	os.Environ()
 	cmd.Dir = repo.WorkDir
 
 	output, err := cmd.Output()
 	if err != nil {
+		fmt.Println("Error executing git branch:", err)
 		return "", err
 	}
 
@@ -109,9 +113,19 @@ func (repo *GitRepo) Push() error {
 
 	if err != nil {
 		return err
-	}
+	} 
 
-	cmd := exec.Command("git", "push", "origin", currentBranch)
+	cmd := exec.Command("git", "status")
+	os.Environ()
+	cmd.Dir = repo.WorkDir
+	cmd.Run()
+
+	if err != nil {
+		return err
+	} 
+
+	cmd = exec.Command("git", "push", "origin", currentBranch)
+	os.Environ()
 	cmd.Dir = repo.WorkDir
 	return cmd.Run()
 }
