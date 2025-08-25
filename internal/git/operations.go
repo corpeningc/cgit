@@ -185,3 +185,27 @@ func (repo *GitRepo) IsClean() (bool, error) {
 
 	return len(output) == 0, nil
 }
+
+func (repo *GitRepo) CreateBranch(branchName string) error {
+	cmd := exec.Command("git", "checkout", "-b", branchName)
+	cmd.Dir = repo.WorkDir
+	
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	
+	err := cmd.Run()
+	return formatCommandError("create branch", err, stdout, stderr)
+}
+
+func (repo *GitRepo) SwitchBranch(branchName string) error {
+	cmd := exec.Command("git", "checkout", branchName)
+	cmd.Dir = repo.WorkDir
+	
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	
+	err := cmd.Run()
+	return formatCommandError("switch branch", err, stdout, stderr)
+}

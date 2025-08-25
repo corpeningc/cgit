@@ -32,6 +32,7 @@ func init() {
 	rootCmd.AddCommand(commitAndPushCmd)
 	rootCmd.AddCommand(commitCmd)
 	rootCmd.AddCommand(pushCmd)
+	rootCmd.AddCommand(newBranchCmd)
 }
 
 var addCmd = &cobra.Command{
@@ -122,5 +123,20 @@ var pushCmd = &cobra.Command{
 		handleError("pushing changes", err)
 
 		fmt.Println("Successfully pushed changes.")
+	},
+}
+
+var newBranchCmd = &cobra.Command {
+	Use: "nb",
+	Short: "Create and switch to a new branch",
+	Run: func (cmd *cobra.Command, args []string) {
+		repo := git.New(".")
+
+		branchName := args[0]
+		err := repo.CreateBranch(branchName)
+		err = repo.SwitchBranch(branchName)
+		handleError("creating and switching to new branch", err)
+
+		fmt.Printf("Successfully created and switched to branch '%s'.\n", branchName)
 	},
 }
