@@ -14,6 +14,10 @@ Built in Go with Cobra CLI and Charm TUI libraries for learning purposes.
 
 
 ## Installation
+
+### Prerequisites
+- Go 1.25 or later
+  
 ``` bash
 go install "github.com/corpeningc/cgit@latest"
 ```
