@@ -1,9 +1,10 @@
 package main
 
 import (
-	"cgit/cmd"
 	"fmt"
 	"os"
+
+	"github.com/corpeningc/cgit/cmd"
 )
 
 func main() {

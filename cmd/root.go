@@ -1,6 +1,11 @@
 package cmd
 
 import (
+	"fmt"
+	"os"
+
+	"github.com/corpeningc/cgit/internal/git"
+	"github.com/corpeningc/cgit/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -15,14 +20,47 @@ func Execute() error {
 }
 
 func init() {
-	// Add sub commands here
+	rootCmd.AddCommand(addCmd)
+	rootCmd.AddCommand(mergeCommand)
 }
 
 var addCmd = &cobra.Command{
 	Use: "add",
 	Short: "Interactively add files to staging",
 	Run: func(cmd *cobra.Command, args []string) {
-		// Implementation here
+		repo := git.New(".")
+
+		files, err := repo.GetModifiedFiles()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting modified files: %v\n", err)
+			os.Exit(1)
+		}
+
+		if len(files) == 0 {
+			fmt.Println("No modified files to add.")
+			return
+		}
+
+		selected, err := ui.SelectFiles(files)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error selecting files: %v\n", err)
+			os.Exit(1)
+		}
+
+		if (len(selected) == 0) {
+			fmt.Println("No files selected.")
+		}
+
+		err = repo.AddFiles(selected)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error adding files: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("Added %d files to staging.\n", len(selected))
+		for _, file := range selected {
+			fmt.Printf(" - %s\n", file)
+		}
 	},
 }
 

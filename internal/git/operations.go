@@ -10,6 +10,10 @@ type GitRepo struct {
 	WorkDir string
 }
 
+func New(workDir string) *GitRepo {
+	return &GitRepo{WorkDir: workDir}
+}
+
 func (repo *GitRepo) GetModifiedFiles() ([]string, error) {
 	cmd := exec.Command("git", "status", "--porcelain")
 	cmd.Dir = repo.WorkDir
