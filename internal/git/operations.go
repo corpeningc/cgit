@@ -141,8 +141,8 @@ func (repo *GitRepo) Push() error {
 	
 	err = pushCmd.Run()
 	if err != nil {
-			return fmt.Errorf("push failed: %v\nStdout: %s\nStderr: %s", 
-					err, stdout.String(), stderr.String())
+		return fmt.Errorf("push failed: %v\nStdout: %s\nStderr: %s", 
+		err, stdout.String(), stderr.String())
 	}
 	
 	return nil 
