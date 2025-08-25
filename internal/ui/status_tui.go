@@ -477,9 +477,9 @@ func (m StatusModel) highlightDiff(content string) string {
 			// Hunk headers (orange)
 			highlightedLines = append(highlightedLines, m.diffHunkStyle.Render(line))
 		case strings.HasPrefix(line, "diff --git") || 
-		     strings.HasPrefix(line, "index ") ||
-		     strings.HasPrefix(line, "---") ||
-		     strings.HasPrefix(line, "+++"):
+				strings.HasPrefix(line, "index ") ||
+				strings.HasPrefix(line, "---") ||
+				strings.HasPrefix(line, "+++"):
 			// Diff headers (blue)
 			highlightedLines = append(highlightedLines, m.diffHeaderStyle.Render(line))
 		default:
@@ -498,7 +498,7 @@ func (m StatusModel) renderHelp() string {
 		return m.helpStyle.Render("esc: back | q: quit")
 	}
 	
-	help := "j/k: nav | h/l: panels | s: stage | u: unstage | d: discard | a: stage all | c: commit | p: push | enter: diff | r: refresh | q: quit"
+	help := "s: stage | u: unstage | d: discard | c: commit | p: push | enter: diff | r: refresh | q: quit"
 	return m.helpStyle.Render(help)
 }
 
