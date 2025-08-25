@@ -2,6 +2,7 @@ package git
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -104,7 +105,19 @@ func (repo *GitRepo) MergeLatest(branch string) error {
 
 func (repo *GitRepo) Commit(message string) error {
 	cmd := exec.Command("git", "commit", "-m", message)
+	os.Environ()
 	cmd.Dir = repo.WorkDir
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+			fmt.Printf("Commit failed: %v\n", err)
+			fmt.Printf("Stdout: %s\n", stdout.String())
+			fmt.Printf("Stderr: %s\n", stderr.String())
+	}
+
 	return cmd.Run()
 }
 
@@ -118,15 +131,28 @@ func (repo *GitRepo) Push() error {
 	cmd := exec.Command("git", "status")
 	os.Environ()
 	cmd.Dir = repo.WorkDir
-	cmd.Run()
 
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err = cmd.Run()
 	if err != nil {
-		return err
-	} 
+			fmt.Printf("Commit failed: %v\n", err)
+			fmt.Printf("Stdout: %s\n", stdout.String())
+			fmt.Printf("Stderr: %s\n", stderr.String())
+	}
 
 	cmd = exec.Command("git", "push", "origin", currentBranch)
 	os.Environ()
 	cmd.Dir = repo.WorkDir
+
+	err = cmd.Run()
+	if err != nil {
+			fmt.Printf("Commit failed: %v\n", err)
+			fmt.Printf("Stdout: %s\n", stdout.String())
+			fmt.Printf("Stderr: %s\n", stderr.String())
+	}
 	return cmd.Run()
 }
 
