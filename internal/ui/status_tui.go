@@ -282,14 +282,20 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	
-	// Update text input if in commit mode
-	if m.showCommit {
-		m.commitInput, cmd = m.commitInput.Update(msg)
+	// Only update text input/viewport for actual user input messages
+	switch msg.(type) {
+	case tea.KeyMsg, tea.WindowSizeMsg:
+		// Update text input if in commit mode
+		if m.showCommit {
+			m.commitInput, cmd = m.commitInput.Update(msg)
+			return m, cmd
+		}
+		
+		m.viewport, cmd = m.viewport.Update(msg)
 		return m, cmd
 	}
 	
-	m.viewport, cmd = m.viewport.Update(msg)
-	return m, cmd
+	return m, nil
 }
 
 func (m StatusModel) View() string {
