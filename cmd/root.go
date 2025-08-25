@@ -33,6 +33,7 @@ func init() {
 	rootCmd.AddCommand(commitCmd)
 	rootCmd.AddCommand(pushCmd)
 	rootCmd.AddCommand(newBranchCmd)
+	rootCmd.AddCommand(statusCmd)
 }
 
 var addCmd = &cobra.Command{
@@ -138,5 +139,18 @@ var newBranchCmd = &cobra.Command {
 		handleError("creating and switching to new branch", err)
 
 		fmt.Printf("Successfully created and switched to branch '%s'.\n", branchName)
+	},
+}
+
+var statusCmd = &cobra.Command{
+	Use:     "status",
+	Aliases: []string{"st"},
+	Short:   "Interactive git status with staging capabilities",
+	Long:    "Launch an interactive TUI for viewing repository status, staging/unstaging files, and committing changes with vim-style navigation",
+	Run: func(cmd *cobra.Command, args []string) {
+		repo := git.New(".")
+
+		err := ui.StartStatusTUI(repo)
+		handleError("starting status TUI", err)
 	},
 }
