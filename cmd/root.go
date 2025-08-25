@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/corpeningc/cgit/internal/git"
 	"github.com/corpeningc/cgit/internal/ui"
@@ -35,6 +37,7 @@ func init() {
 	rootCmd.AddCommand(newBranchCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(switchBranchCmd)
+	rootCmd.AddCommand(stashPopCmd)
 }
 
 var addCmd = &cobra.Command{
@@ -166,11 +169,46 @@ var switchBranchCmd = &cobra.Command{
 	Short: "Switch to an existing branch",
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
-
 		branchName := args[0]
-		err := repo.SwitchBranch(branchName)
+
+		// Check if working directory is clean
+		isClean, err := repo.IsClean()
+		handleError("checking repository status", err)
+
+		if !isClean {
+			fmt.Print("You need to stash your changes before swapping. Enter a stash name: ")
+			reader := bufio.NewReader(os.Stdin)
+			stashName, err := reader.ReadString('\n')
+			handleError("reading stash name", err)
+			
+			stashName = strings.TrimSpace(stashName)
+			if stashName == "" {
+				fmt.Println("No stash name provided. Aborting switch.")
+				return
+			}
+
+			err = repo.Stash(stashName)
+			handleError("stashing changes", err)
+			fmt.Printf("Changes stashed as '%s'.\n", stashName)
+		}
+
+		err = repo.SwitchBranch(branchName)
 		handleError("switching branches", err)
 
 		fmt.Printf("Successfully switched to branch '%s'.\n", branchName)
+	},
+}
+
+var stashPopCmd = &cobra.Command{
+	Use: "stash-pop",
+	Aliases: []string{"sp"},
+	Short: "Pop the most recent stash",
+	Run: func(cmd *cobra.Command, args []string) {
+		repo := git.New(".")
+
+		err := repo.StashPop()
+		handleError("popping stash", err)
+
+		fmt.Println("Successfully popped stash.")
 	},
 }

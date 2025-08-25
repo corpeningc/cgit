@@ -439,3 +439,27 @@ func (repo *GitRepo) StageAllFiles() error {
 	err := cmd.Run()
 	return formatCommandError("stage all files", err, stdout, stderr)
 }
+
+func (repo *GitRepo) Stash(message string) error {
+	cmd := exec.Command("git", "stash", "push", "-m", message)
+	cmd.Dir = repo.WorkDir
+	
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	
+	err := cmd.Run()
+	return formatCommandError("stash changes", err, stdout, stderr)
+}
+
+func (repo *GitRepo) StashPop() error {
+	cmd := exec.Command("git", "stash", "pop")
+	cmd.Dir = repo.WorkDir
+	
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	
+	err := cmd.Run()
+	return formatCommandError("pop stash", err, stdout, stderr)
+}
