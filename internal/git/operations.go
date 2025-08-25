@@ -118,7 +118,7 @@ func (repo *GitRepo) Commit(message string) error {
 			fmt.Printf("Stderr: %s\n", stderr.String())
 	}
 
-	return cmd.Run()
+	return err
 }
 
 func (repo *GitRepo) Push() error {
