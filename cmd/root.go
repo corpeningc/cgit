@@ -98,7 +98,6 @@ var commitAndPushCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Error committing changes: %v\n", err)
 			os.Exit(1)
 		}
-		// test
 		
 		err = repo.Push()
 		if err != nil {
