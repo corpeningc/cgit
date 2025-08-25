@@ -9,6 +9,14 @@ import (
 	"strings"
 )
 
+func formatCommandError(operation string, err error, stdout, stderr bytes.Buffer) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s failed: %v\nStdout: %s\nStderr: %s", 
+		operation, err, stdout.String(), stderr.String())
+}
+
 type GitRepo struct {
 	WorkDir string
 }
@@ -47,8 +55,13 @@ func (repo *GitRepo) AddFiles(files []string) error {
 	args := append([]string{"add"}, files...)
 	cmd := exec.Command("git", args...)
 	cmd.Dir = repo.WorkDir
+	
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
-	return cmd.Run()
+	err := cmd.Run()
+	return formatCommandError("add files", err, stdout, stderr)
 }
 
 func (repo *GitRepo) GetCurrentBranch() (string, error) {
@@ -67,13 +80,25 @@ func (repo *GitRepo) GetCurrentBranch() (string, error) {
 func (repo *GitRepo) Fetch() error {
 	cmd := exec.Command("git", "fetch", "origin")
 	cmd.Dir = repo.WorkDir
-	return cmd.Run()
+	
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	
+	err := cmd.Run()
+	return formatCommandError("fetch", err, stdout, stderr)
 }
 
 func (repo *GitRepo) PullLatestRemote(branch string) error {
 	cmd := exec.Command("git", "pull", "origin", branch)
 	cmd.Dir = repo.WorkDir
-	return cmd.Run()
+	
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	
+	err := cmd.Run()
+	return formatCommandError("pull", err, stdout, stderr)
 }
 
 func (repo *GitRepo) MergeLatest(branch string) error {
@@ -86,7 +111,13 @@ func (repo *GitRepo) MergeLatest(branch string) error {
 	if currentBranch == "main" || currentBranch == "master" {
 		cmd := exec.Command("git", "pull")
 		cmd.Dir = repo.WorkDir
-		return cmd.Run()
+		
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		
+		err := cmd.Run()
+		return formatCommandError("pull", err, stdout, stderr)
 	}
 
 	// Get latest from remote
@@ -99,7 +130,13 @@ func (repo *GitRepo) MergeLatest(branch string) error {
 	// Merge remote into current
 	cmd := exec.Command("git", "merge", "origin/"+branch)
 	cmd.Dir = repo.WorkDir
-	return cmd.Run()
+	
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	
+	err = cmd.Run()
+	return formatCommandError("merge", err, stdout, stderr)
 }
 
 func (repo *GitRepo) Commit(message string) error {
@@ -111,13 +148,7 @@ func (repo *GitRepo) Commit(message string) error {
 	cmd.Stderr = &stderr
 
 	err := cmd.Run()
-	if err != nil {
-			fmt.Printf("Commit failed: %v\n", err)
-			fmt.Printf("Stdout: %s\n", stdout.String())
-			fmt.Printf("Stderr: %s\n", stderr.String())
-	}
-
-	return err
+	return formatCommandError("commit", err, stdout, stderr)
 }
 
 func (repo *GitRepo) Push() error {
@@ -140,12 +171,7 @@ func (repo *GitRepo) Push() error {
 	pushCmd.Stderr = &stderr
 	
 	err = pushCmd.Run()
-	if err != nil {
-		return fmt.Errorf("push failed: %v\nStdout: %s\nStderr: %s", 
-		err, stdout.String(), stderr.String())
-	}
-	
-	return nil 
+	return formatCommandError("push", err, stdout, stderr)
 }
 
 func (repo *GitRepo) IsClean() (bool, error) {

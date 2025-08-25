@@ -9,6 +9,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func handleError(operation string, err error) {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error %s: %v\n", operation, err)
+		os.Exit(1)
+	}
+}
+
 var rootCmd = &cobra.Command{
 	Use: "cgit",
 	Short: "A simplified git workflow tool",
@@ -34,10 +41,7 @@ var addCmd = &cobra.Command{
 		repo := git.New(".")
 
 		files, err := repo.GetModifiedFiles()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error getting modified files: %v\n", err)
-			os.Exit(1)
-		}
+		handleError("getting modified files", err)
 
 		if len(files) == 0 {
 			fmt.Println("No modified files to add.")
@@ -45,20 +49,14 @@ var addCmd = &cobra.Command{
 		}
 
 		selected, err := ui.SelectFiles(files)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error selecting files: %v\n", err)
-			os.Exit(1)
-		}
+		handleError("selecting files", err)
 
 		if (len(selected) == 0) {
 			fmt.Println("No files selected.")
 		}
 
 		err = repo.AddFiles(selected)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error adding files: %v\n", err)
-			os.Exit(1)
-		}
+		handleError("adding files", err)
 
 		fmt.Printf("Added %d files to staging.\n", len(selected))
 		for _, file := range selected {
@@ -75,10 +73,7 @@ var mergeCommand = &cobra.Command{
 		repo := git.New(".")
 
 		err := repo.MergeLatest(branch)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error merging latest changes: %v\n", err)
-			os.Exit(1)
-		}
+		handleError("merging latest changes", err)
 
 		fmt.Println("Successfully merged latest changes.")
 	},
@@ -94,17 +89,10 @@ var commitAndPushCmd = &cobra.Command{
 
 		commitMsg := args[0]
 		err := repo.Commit(commitMsg)
-
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error committing changes: %v\n", err)
-			os.Exit(1)
-		}
+		handleError("committing changes", err)
 		
 		err = repo.Push()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error pushing changes: %v\n", err)
-			os.Exit(1)
-		}
+		handleError("pushing changes", err)
 
 		fmt.Println("Successfully committed and pushed changes.")
 	},
@@ -118,11 +106,7 @@ var commitCmd = &cobra.Command{
 
 		commitMsg := args[0]
 		err := repo.Commit(commitMsg)
-
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error committing changes: %v\n", err)
-			os.Exit(1)
-		}
+		handleError("committing changes", err)
 
 		fmt.Println("Successfully committed changes.")
 	},
@@ -135,10 +119,7 @@ var pushCmd = &cobra.Command{
 		repo := git.New(".")
 
 		err := repo.Push()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error pushing changes: %v\n", err)
-			os.Exit(1)
-		}
+		handleError("pushing changes", err)
 
 		fmt.Println("Successfully pushed changes.")
 	},
