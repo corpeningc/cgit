@@ -332,6 +332,11 @@ func (repo *GitRepo) GetFileStatuses() ([]FileStatus, []FileStatus, error) {
 		workTreeStatus := string(line[1])
 		filePath := strings.TrimSpace(line[3:])
 		
+		// Git quotes filenames with special characters - remove the quotes
+		if strings.HasPrefix(filePath, "\"") && strings.HasSuffix(filePath, "\"") {
+			filePath = filePath[1 : len(filePath)-1]
+		}
+		
 		// Staged files
 		if stageStatus != " " && stageStatus != "?" {
 			stagedFiles = append(stagedFiles, FileStatus{
@@ -357,7 +362,7 @@ func (repo *GitRepo) GetFileStatuses() ([]FileStatus, []FileStatus, error) {
 }
 
 func (repo *GitRepo) StageFile(filePath string) error {
-	cmd := exec.Command("git", "add", filePath)
+	cmd := exec.Command("git", "add", "--", filePath)
 	cmd.Dir = repo.WorkDir
 	
 	var stdout, stderr bytes.Buffer
@@ -368,8 +373,13 @@ func (repo *GitRepo) StageFile(filePath string) error {
 	return formatCommandError("stage file", err, stdout, stderr)
 }
 
-func (repo *GitRepo) UnstageFile(filePath string) error {
-	cmd := exec.Command("git", "restore", "--staged", filePath)
+func (repo *GitRepo) UnstageFile(filePath string, status string) error {
+	// Untracked files can't be unstaged since they were never staged
+	if status == "?" {
+		return fmt.Errorf("cannot unstage untracked file: %s", filePath)
+	}
+	
+	cmd := exec.Command("git", "restore", "--staged", "--", filePath)
 	cmd.Dir = repo.WorkDir
 	
 	var stdout, stderr bytes.Buffer
@@ -380,8 +390,17 @@ func (repo *GitRepo) UnstageFile(filePath string) error {
 	return formatCommandError("unstage file", err, stdout, stderr)
 }
 
-func (repo *GitRepo) DiscardChanges(filePath string) error {
-	cmd := exec.Command("git", "restore", filePath)
+func (repo *GitRepo) DiscardChanges(filePath string, status string) error {
+	var cmd *exec.Cmd
+	
+	if status == "?" {
+		// Untracked file - remove it
+		cmd = exec.Command("git", "clean", "-f", "--", filePath)
+	} else {
+		// Modified/deleted file - restore it
+		cmd = exec.Command("git", "restore", "--", filePath)
+	}
+	
 	cmd.Dir = repo.WorkDir
 	
 	var stdout, stderr bytes.Buffer
@@ -395,9 +414,9 @@ func (repo *GitRepo) DiscardChanges(filePath string) error {
 func (repo *GitRepo) GetFileDiff(filePath string, staged bool) (string, error) {
 	var cmd *exec.Cmd
 	if staged {
-		cmd = exec.Command("git", "diff", "--staged", filePath)
+		cmd = exec.Command("git", "diff", "--staged", "--", filePath)
 	} else {
-		cmd = exec.Command("git", "diff", filePath)
+		cmd = exec.Command("git", "diff", "--", filePath)
 	}
 	cmd.Dir = repo.WorkDir
 	

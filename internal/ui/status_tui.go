@@ -517,10 +517,10 @@ func (m StatusModel) unstageFile() tea.Msg {
 	}
 	
 	file := m.repoStatus.StagedFiles[m.selectedIndex]
-	err := m.repo.UnstageFile(file.Path)
+	err := m.repo.UnstageFile(file.Path, file.Status)
 	if err != nil {
-		// Handle error
-		return refreshMsg{}
+		// Handle error - show error message
+		return fmt.Errorf("failed to unstage file: %v", err)
 	}
 	
 	return refreshMsg{}
@@ -533,10 +533,10 @@ func (m StatusModel) discardChanges() tea.Msg {
 	}
 	
 	file := m.repoStatus.UnstagedFiles[m.selectedIndex]
-	err := m.repo.DiscardChanges(file.Path)
+	err := m.repo.DiscardChanges(file.Path, file.Status)
 	if err != nil {
-		// Handle error
-		return refreshMsg{}
+		// Handle error - show error message
+		return fmt.Errorf("failed to discard changes: %v", err)
 	}
 	
 	return refreshMsg{}
