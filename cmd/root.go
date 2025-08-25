@@ -38,6 +38,7 @@ func init() {
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(switchBranchCmd)
 	rootCmd.AddCommand(stashPopCmd)
+	rootCmd.AddCommand(fullCleanCmd)
 }
 
 var addCmd = &cobra.Command{
@@ -210,5 +211,19 @@ var stashPopCmd = &cobra.Command{
 		handleError("popping stash", err)
 
 		fmt.Println("Successfully popped stash.")
+	},
+}
+
+var fullCleanCmd = &cobra.Command{
+	Use: "full-clean",
+	Aliases: []string{"fc"},
+	Short: "Hard reset branch; Clean files and directories",
+	Run: func(cmd *cobra.Command, args []string) {
+		repo := git.New(".")
+
+		err := repo.FullClean()
+		handleError("performing full clean", err)
+
+		fmt.Println("Successfully cleaned repository.")
 	},
 }

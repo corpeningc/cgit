@@ -463,3 +463,27 @@ func (repo *GitRepo) StashPop() error {
 	err := cmd.Run()
 	return formatCommandError("pop stash", err, stdout, stderr)
 }
+
+func (repo *GitRepo) FullClean() error {
+	cmd := exec.Command("git", "reset", "--hard")
+	cmd.Dir = repo.WorkDir
+	
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	
+	err := cmd.Run()
+	if err != nil {
+		return formatCommandError("reset --hard", err, stdout, stderr)
+	}
+	
+	cleanCmd := exec.Command("git", "clean", "-fd")
+	cleanCmd.Dir = repo.WorkDir
+	
+	var cleanStdout, cleanStderr bytes.Buffer
+	cleanCmd.Stdout = &cleanStdout
+	cleanCmd.Stderr = &cleanStderr
+	
+	err = cleanCmd.Run()
+	return formatCommandError("clean -fd", err, cleanStdout, cleanStderr)
+}
