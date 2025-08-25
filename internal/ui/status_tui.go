@@ -154,7 +154,7 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "r":
 			if !m.showCommit {
 				m.showMessage("Refreshing...")
-				return m, m.refreshStatus
+				return m, tea.Batch(m.refreshStatus, m.scheduleMessageTimeout())
 			}
 		
 		case "enter":
@@ -264,7 +264,7 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.showCommit {
 			// Stay in commit mode on error
 		}
-		return m, m.refreshStatus
+		return m, tea.Batch(m.refreshStatus, m.scheduleMessageTimeout())
 		
 	case string:
 		switch msg {
@@ -273,10 +273,10 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.commitInput.SetValue("")
 				m.commitInput.Blur()
 				m.showMessage("Commit successful!")
-				return m, m.refreshStatus
+				return m, tea.Batch(m.refreshStatus, m.scheduleMessageTimeout())
 			case "push_success":
 				m.showMessage("Push successful!")
-				return m, m.refreshStatus
+				return m, tea.Batch(m.refreshStatus, m.scheduleMessageTimeout())
 		}
 	}
 	
@@ -551,6 +551,12 @@ func (m *StatusModel) moveUp() {
 func (m *StatusModel) showMessage(msg string) {
 	m.message = msg
 	m.messageTime = time.Now()
+}
+
+func (m StatusModel) scheduleMessageTimeout() tea.Cmd {
+	return tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+		return messageTimeoutMsg{}
+	})
 }
 
 func (m StatusModel) refreshStatus() tea.Msg {
