@@ -45,6 +45,12 @@ type StatusModel struct {
 	headerStyle       lipgloss.Style
 	helpStyle         lipgloss.Style
 	messageStyle      lipgloss.Style
+	
+	// Diff styles
+	diffAddedStyle    lipgloss.Style
+	diffRemovedStyle  lipgloss.Style
+	diffHeaderStyle   lipgloss.Style
+	diffHunkStyle     lipgloss.Style
 }
 
 type refreshMsg struct{}
@@ -93,6 +99,20 @@ func NewStatusModel(repo *git.GitRepo) StatusModel {
 		messageStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("46")).
 			Bold(true),
+		
+		// Diff syntax highlighting styles
+		diffAddedStyle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("46")), // Green for additions
+		
+		diffRemovedStyle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("196")), // Red for deletions
+		
+		diffHeaderStyle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("33")).
+			Bold(true), // Blue for headers
+		
+		diffHunkStyle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("208")), // Orange for hunk headers
 	}
 }
 
@@ -213,6 +233,11 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.commitInput.SetValue("")
 				}
 			}
+		
+		case "p":
+			if !m.showCommit {
+				return m, m.pushChanges()
+			}
 		}
 		
 	case statusMsg:
@@ -242,12 +267,16 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.refreshStatus
 		
 	case string:
-		if msg == "commit_success" {
-			m.showCommit = false
-			m.commitInput.SetValue("")
-			m.commitInput.Blur()
-			m.showMessage("Commit successful!")
-			return m, m.refreshStatus
+		switch msg {
+			case "commit_success":
+				m.showCommit = false
+				m.commitInput.SetValue("")
+				m.commitInput.Blur()
+				m.showMessage("Commit successful!")
+				return m, m.refreshStatus
+			case "push_success":
+				m.showMessage("Push successful!")
+				return m, m.refreshStatus
 		}
 	}
 	
@@ -425,7 +454,45 @@ func (m StatusModel) renderCommitView() string {
 }
 
 func (m StatusModel) renderDiffView() string {
+	if m.diffContent == "" {
+		return m.viewport.View()
+	}
+	
+	// Apply syntax highlighting to diff content
+	highlightedContent := m.highlightDiff(m.diffContent)
+	m.viewport.SetContent(highlightedContent)
+	
 	return m.viewport.View()
+}
+
+func (m StatusModel) highlightDiff(content string) string {
+	lines := strings.Split(content, "\n")
+	var highlightedLines []string
+	
+	for _, line := range lines {
+		switch {
+		case strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++"):
+			// Added lines (green)
+			highlightedLines = append(highlightedLines, m.diffAddedStyle.Render(line))
+		case strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---"):
+			// Removed lines (red)
+			highlightedLines = append(highlightedLines, m.diffRemovedStyle.Render(line))
+		case strings.HasPrefix(line, "@@"):
+			// Hunk headers (orange)
+			highlightedLines = append(highlightedLines, m.diffHunkStyle.Render(line))
+		case strings.HasPrefix(line, "diff --git") || 
+		     strings.HasPrefix(line, "index ") ||
+		     strings.HasPrefix(line, "---") ||
+		     strings.HasPrefix(line, "+++"):
+			// Diff headers (blue)
+			highlightedLines = append(highlightedLines, m.diffHeaderStyle.Render(line))
+		default:
+			// Context lines (default color)
+			highlightedLines = append(highlightedLines, line)
+		}
+	}
+	
+	return strings.Join(highlightedLines, "\n")
 }
 
 func (m StatusModel) renderHelp() string {
@@ -435,7 +502,7 @@ func (m StatusModel) renderHelp() string {
 		return m.helpStyle.Render("esc: back | q: quit")
 	}
 	
-	help := "j/k: nav | h/l: panels | s: stage | u: unstage | d: discard | a: stage all | c: commit | enter: diff | r: refresh | q: quit"
+	help := "j/k: nav | h/l: panels | s: stage | u: unstage | d: discard | a: stage all | c: commit | p: push | enter: diff | r: refresh | q: quit"
 	return m.helpStyle.Render(help)
 }
 
@@ -550,6 +617,16 @@ func (m StatusModel) stageAllFiles() tea.Msg {
 	}
 	
 	return refreshMsg{}
+}
+
+func (m StatusModel) pushChanges() tea.Cmd {
+	return func() tea.Msg {
+		err := m.repo.Push()
+		if err != nil {
+			return fmt.Errorf("push failed: %v", err)
+		}
+		return "push_success"
+	}
 }
 
 
