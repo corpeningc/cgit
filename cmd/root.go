@@ -108,3 +108,21 @@ var commitAndPushCmd = &cobra.Command{
 		fmt.Println("Successfully committed and pushed changes.")
 	},
 }
+
+var commitCmd = &cobra.Command{
+	Use: "commit",
+	Short: "Commit staged changes with a message",
+	Run: func(cmd *cobra.Command, args []string) {
+		repo := git.New(".")
+
+		commitMsg := args[0]
+		err := repo.Commit(commitMsg)
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error committing changes: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("Successfully committed changes.")
+	},
+}
