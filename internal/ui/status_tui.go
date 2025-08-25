@@ -154,7 +154,7 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "r":
 			if !m.showCommit {
 				m.showMessage("Refreshing...")
-				return m, tea.Batch(m.refreshStatus, m.scheduleMessageTimeout())
+				return m, m.refreshStatus
 			}
 		
 		case "enter":
@@ -255,18 +255,13 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case refreshMsg:
 		return m, m.refreshStatus
 		
-	case messageTimeoutMsg:
-		if time.Since(m.messageTime) >= 3*time.Second {
-			m.message = ""
-		}
-		return m, nil
 	
 	case error:
 		m.showMessage(msg.Error())
 		if m.showCommit {
 			// Stay in commit mode on error
 		}
-		return m, tea.Batch(m.refreshStatus, m.scheduleMessageTimeout())
+		return m, m.refreshStatus
 		
 	case string:
 		switch msg {
@@ -275,27 +270,21 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.commitInput.SetValue("")
 				m.commitInput.Blur()
 				m.showMessage("Commit successful!")
-				return m, tea.Batch(m.refreshStatus, m.scheduleMessageTimeout())
+				return m, m.refreshStatus
 			case "push_success":
 				m.showMessage("Push successful!")
-				return m, tea.Batch(m.refreshStatus, m.scheduleMessageTimeout())
+				return m, m.refreshStatus
 		}
 	}
 	
-	// Only update text input/viewport for actual user input messages
-	switch msg.(type) {
-	case tea.KeyMsg, tea.WindowSizeMsg:
-		// Update text input if in commit mode
-		if m.showCommit {
-			m.commitInput, cmd = m.commitInput.Update(msg)
-			return m, cmd
-		}
-		
-		m.viewport, cmd = m.viewport.Update(msg)
+	// Update text input if in commit mode
+	if m.showCommit {
+		m.commitInput, cmd = m.commitInput.Update(msg)
 		return m, cmd
 	}
 	
-	return m, nil
+	m.viewport, cmd = m.viewport.Update(msg)
+	return m, cmd
 }
 
 func (m StatusModel) View() string {
@@ -561,11 +550,6 @@ func (m *StatusModel) showMessage(msg string) {
 	m.messageTime = time.Now()
 }
 
-func (m StatusModel) scheduleMessageTimeout() tea.Cmd {
-	return tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
-		return messageTimeoutMsg{}
-	})
-}
 
 func (m StatusModel) refreshStatus() tea.Msg {
 	status, err := m.repo.GetRepositoryStatus()
