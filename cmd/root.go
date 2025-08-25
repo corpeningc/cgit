@@ -24,6 +24,7 @@ func init() {
 	rootCmd.AddCommand(mergeCommand)
 	rootCmd.AddCommand(commitAndPushCmd)
 	rootCmd.AddCommand(commitCmd)
+	rootCmd.AddCommand(pushCmd)
 }
 
 var addCmd = &cobra.Command{
@@ -124,5 +125,21 @@ var commitCmd = &cobra.Command{
 		}
 
 		fmt.Println("Successfully committed changes.")
+	},
+}
+
+var pushCmd = &cobra.Command{
+	Use: "push",
+	Short: "Push committed changes to remote",
+	Run: func(cmd *cobra.Command, args []string) {
+		repo := git.New(".")
+
+		err := repo.Push()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error pushing changes: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("Successfully pushed changes.")
 	},
 }
