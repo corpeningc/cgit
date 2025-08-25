@@ -12,6 +12,13 @@ Built in Go with Cobra CLI and Charm TUI libraries for learning purposes.
 - Easy branch creation with `cgit new-branch` (or `cgit nb`)
 - Simple branch switching with `cgit switch` (or `cgit sw`)
 
+
+## Installation
+``` bash
+go install "github.com/corpeningc/cgit@latest"
+```
+
+
 ## Usage
 
 ```bash
