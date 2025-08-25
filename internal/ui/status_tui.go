@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -17,6 +18,7 @@ const (
 	UnstagedPanel PanelType = iota
 	StagedPanel
 	DiffPanel
+	CommitPanel
 )
 
 type StatusModel struct {
@@ -27,6 +29,8 @@ type StatusModel struct {
 	viewport     viewport.Model
 	showDiff     bool
 	diffContent  string
+	commitInput  textinput.Model
+	showCommit   bool
 	width        int
 	height       int
 	quitting     bool
@@ -51,9 +55,15 @@ type messageTimeoutMsg struct{}
 func NewStatusModel(repo *git.GitRepo) StatusModel {
 	vp := viewport.New(0, 0)
 	
+	ci := textinput.New()
+	ci.Placeholder = "Enter commit message..."
+	ci.CharLimit = 500
+	ci.Width = 50
+	
 	return StatusModel{
 		repo:         repo,
 		viewport:     vp,
+		commitInput:  ci,
 		currentPanel: UnstagedPanel,
 		
 		// Initialize styles
@@ -87,7 +97,7 @@ func NewStatusModel(repo *git.GitRepo) StatusModel {
 }
 
 func (m StatusModel) Init() tea.Cmd {
-	return m.refreshStatus
+	return tea.Batch(m.refreshStatus, textinput.Blink)
 }
 
 func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -111,61 +121,98 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		
 		case "esc":
-			if m.showDiff {
+			if m.showCommit {
+				m.showCommit = false
+				m.commitInput.SetValue("")
+				return m, nil
+			} else if m.showDiff {
 				m.showDiff = false
 				m.diffContent = ""
 				return m, nil
 			}
 			
 		case "r":
-			m.showMessage("Refreshing...")
-			return m, m.refreshStatus
+			if !m.showCommit {
+				m.showMessage("Refreshing...")
+				return m, m.refreshStatus
+			}
+		
+		case "enter":
+			if m.showCommit {
+				// Commit with the entered message
+				message := m.commitInput.Value()
+				if message != "" {
+					return m, m.performCommit(message)
+				}
+			} else {
+				return m, m.showFileDiff
+			}
 			
 		case "h", "left":
-			if m.currentPanel == StagedPanel {
+			if !m.showCommit && m.currentPanel == StagedPanel {
 				m.currentPanel = UnstagedPanel
 				m.selectedIndex = 0
 			}
 			
 		case "l", "right":
-			if m.currentPanel == UnstagedPanel {
+			if !m.showCommit && m.currentPanel == UnstagedPanel {
 				m.currentPanel = StagedPanel  
 				m.selectedIndex = 0
 			}
 			
 		case "j", "down":
-			m.moveDown()
+			if !m.showCommit {
+				m.moveDown()
+			}
 			
 		case "k", "up":
-			m.moveUp()
+			if !m.showCommit {
+				m.moveUp()
+			}
 			
 		case "g":
-			m.selectedIndex = 0
+			if !m.showCommit {
+				m.selectedIndex = 0
+			}
 			
 		case "G":
-			if m.currentPanel == UnstagedPanel && m.repoStatus != nil {
-				m.selectedIndex = len(m.repoStatus.UnstagedFiles) - 1
-			} else if m.currentPanel == StagedPanel && m.repoStatus != nil {
-				m.selectedIndex = len(m.repoStatus.StagedFiles) - 1
+			if !m.showCommit {
+				if m.currentPanel == UnstagedPanel && m.repoStatus != nil {
+					m.selectedIndex = len(m.repoStatus.UnstagedFiles) - 1
+				} else if m.currentPanel == StagedPanel && m.repoStatus != nil {
+					m.selectedIndex = len(m.repoStatus.StagedFiles) - 1
+				}
 			}
 			
 		case "s", " ":
-			return m, m.stageFile
+			if !m.showCommit {
+				return m, m.stageFile
+			}
 			
 		case "u":
-			return m, m.unstageFile
+			if !m.showCommit {
+				return m, m.unstageFile
+			}
 			
 		case "d":
-			return m, m.discardChanges
+			if !m.showCommit {
+				return m, m.discardChanges
+			}
 			
 		case "a":
-			return m, m.stageAllFiles
+			if !m.showCommit {
+				return m, m.stageAllFiles
+			}
 			
 		case "c":
-			return m, m.commitPrompt
-			
-		case "enter":
-			return m, m.showFileDiff
+			if !m.showCommit {
+				// Check if there are staged files
+				if m.repoStatus != nil && len(m.repoStatus.StagedFiles) > 0 {
+					m.showCommit = true
+					m.commitInput.Focus()
+					m.commitInput.SetValue("")
+				}
+			}
 		}
 		
 	case statusMsg:
@@ -186,6 +233,28 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if time.Since(m.messageTime) >= 3*time.Second {
 			m.message = ""
 		}
+	
+	case error:
+		m.showMessage(msg.Error())
+		if m.showCommit {
+			// Stay in commit mode on error
+		}
+		return m, m.refreshStatus
+		
+	case string:
+		if msg == "commit_success" {
+			m.showCommit = false
+			m.commitInput.SetValue("")
+			m.commitInput.Blur()
+			m.showMessage("Commit successful!")
+			return m, m.refreshStatus
+		}
+	}
+	
+	// Update text input if in commit mode
+	if m.showCommit {
+		m.commitInput, cmd = m.commitInput.Update(msg)
+		return m, cmd
 	}
 	
 	m.viewport, cmd = m.viewport.Update(msg)
@@ -207,7 +276,10 @@ func (m StatusModel) View() string {
 	header := m.renderHeader()
 	sections = append(sections, header)
 	
-	if m.showDiff {
+	if m.showCommit {
+		// Show commit input view
+		sections = append(sections, m.renderCommitView())
+	} else if m.showDiff {
 		// Show diff view
 		sections = append(sections, m.renderDiffView())
 	} else {
@@ -327,12 +399,39 @@ func (m StatusModel) renderStagedPanel() string {
 	return m.panelStyle.Width(panelWidth).Render(content.String())
 }
 
+func (m StatusModel) renderCommitView() string {
+	var content strings.Builder
+	
+	// Title
+	title := m.titleStyle.Render("Commit Changes")
+	content.WriteString(title + "\n\n")
+	
+	// Show staged files
+	if m.repoStatus != nil && len(m.repoStatus.StagedFiles) > 0 {
+		content.WriteString(m.headerStyle.Render("Files to be committed:") + "\n")
+		for _, file := range m.repoStatus.StagedFiles {
+			statusChar := m.getStatusChar(file.Status)
+			line := fmt.Sprintf("  %s [%s]", file.Path, statusChar)
+			content.WriteString(m.unselectedStyle.Render(line) + "\n")
+		}
+		content.WriteString("\n")
+	}
+	
+	// Commit message input
+	content.WriteString(m.headerStyle.Render("Commit message:") + "\n")
+	content.WriteString(m.commitInput.View() + "\n")
+	
+	return content.String()
+}
+
 func (m StatusModel) renderDiffView() string {
 	return m.viewport.View()
 }
 
 func (m StatusModel) renderHelp() string {
-	if m.showDiff {
+	if m.showCommit {
+		return m.helpStyle.Render("enter: commit | esc: cancel | q: quit")
+	} else if m.showDiff {
 		return m.helpStyle.Render("esc: back | q: quit")
 	}
 	
@@ -368,14 +467,14 @@ func (m StatusModel) getCurrentFileCount() int {
 	return len(m.repoStatus.StagedFiles)
 }
 
-func (m StatusModel) moveDown() {
+func (m *StatusModel) moveDown() {
 	count := m.getCurrentFileCount()
 	if count > 0 {
 		m.selectedIndex = (m.selectedIndex + 1) % count
 	}
 }
 
-func (m StatusModel) moveUp() {
+func (m *StatusModel) moveUp() {
 	count := m.getCurrentFileCount()
 	if count > 0 {
 		m.selectedIndex = (m.selectedIndex - 1 + count) % count
@@ -453,21 +552,15 @@ func (m StatusModel) stageAllFiles() tea.Msg {
 	return refreshMsg{}
 }
 
-func (m StatusModel) commitPrompt() tea.Msg {
-	// Check if there are staged files
-	if m.repoStatus == nil || len(m.repoStatus.StagedFiles) == 0 {
-		return refreshMsg{}
-	}
-	
-	// Launch commit input in a goroutine
-	go func() {
-		err := StartCommitInput(m.repo)
-		if err == nil {
-			// Commit successful, could send a message or refresh
+
+func (m StatusModel) performCommit(message string) tea.Cmd {
+	return func() tea.Msg {
+		err := m.repo.Commit(message)
+		if err != nil {
+			return fmt.Errorf("commit failed: %v", err)
 		}
-	}()
-	
-	return refreshMsg{}
+		return "commit_success"
+	}
 }
 
 func (m StatusModel) showFileDiff() tea.Msg {
