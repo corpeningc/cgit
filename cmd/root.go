@@ -23,6 +23,7 @@ func init() {
 	rootCmd.AddCommand(addCmd)
 	rootCmd.AddCommand(mergeCommand)
 	rootCmd.AddCommand(commitAndPushCmd)
+	rootCmd.AddCommand(commitCmd)
 }
 
 var addCmd = &cobra.Command{
