@@ -22,6 +22,7 @@ func Execute() error {
 func init() {
 	rootCmd.AddCommand(addCmd)
 	rootCmd.AddCommand(mergeCommand)
+	rootCmd.AddCommand(commitAndPushCmd)
 }
 
 var addCmd = &cobra.Command{
@@ -68,6 +69,41 @@ var mergeCommand = &cobra.Command{
 	Use: "merge",
 	Short: "Fetch latest remote changes and merge",
 	Run: func(cmd *cobra.Command, args []string) {
-		// Implement
+		branch := args[0]
+		repo := git.New(".")
+
+		err := repo.MergeLatest(branch)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error merging latest changes: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("Successfully merged latest changes.")
+	},
+}
+
+var commitAndPushCmd = &cobra.Command{
+	Use: "cap",
+	Short: "Commit and push changes",
+
+	Run: func(cmd *cobra.Command, args []string) {
+		repo := git.New(".")
+
+
+		commitMsg := args[0]
+		err := repo.Commit(commitMsg)
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error committing changes: %v\n", err)
+			os.Exit(1)
+		}
+		
+		err = repo.Push()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error pushing changes: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("Successfully committed and pushed changes.")
 	},
 }
