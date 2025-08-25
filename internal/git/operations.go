@@ -52,16 +52,15 @@ func (repo *GitRepo) AddFiles(files []string) error {
 }
 
 func (repo *GitRepo) GetCurrentBranch() (string, error) {
-	cmd := exec.Command("git", "branch")
-	os.Environ()
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd.Env = os.Environ()
 	cmd.Dir = repo.WorkDir
-
+	
 	output, err := cmd.Output()
 	if err != nil {
-		fmt.Println("Error executing git branch:", err)
-		return "", err
+			return "", fmt.Errorf("failed to get current branch: %v", err)
 	}
-
+	
 	return strings.TrimSpace(string(output)), nil
 }
 
@@ -122,33 +121,31 @@ func (repo *GitRepo) Commit(message string) error {
 }
 
 func (repo *GitRepo) Push() error {
-    currentBranch, err := repo.GetCurrentBranch()
-    if err != nil {
-        return err
-    }
-    
-    // Warmup with git status
-    statusCmd := exec.Command("git", "status")
-    statusCmd.Env = os.Environ() // Actually assign the environment
-    statusCmd.Dir = repo.WorkDir
-    statusCmd.Run() // Just run it, ignore output for warmup
-    
-    // Now push
-    pushCmd := exec.Command("git", "push", "origin", currentBranch)
-    pushCmd.Env = os.Environ() // Assign environment
-    pushCmd.Dir = repo.WorkDir
-    
-    var stdout, stderr bytes.Buffer
-    pushCmd.Stdout = &stdout
-    pushCmd.Stderr = &stderr
-    
-    err = pushCmd.Run() // Only run once
-    if err != nil {
-        return fmt.Errorf("push failed: %v\nStdout: %s\nStderr: %s", 
-            err, stdout.String(), stderr.String())
-    }
-    
-    return nil // Don't call cmd.Run() again
+	currentBranch, err := repo.GetCurrentBranch()
+	if err != nil {
+			return err
+	}
+	
+	statusCmd := exec.Command("git", "status")
+	statusCmd.Env = os.Environ() 
+	statusCmd.Dir = repo.WorkDir
+	statusCmd.Run() 
+	
+	pushCmd := exec.Command("git", "push", "origin", currentBranch)
+	pushCmd.Env = os.Environ()
+	pushCmd.Dir = repo.WorkDir
+	
+	var stdout, stderr bytes.Buffer
+	pushCmd.Stdout = &stdout
+	pushCmd.Stderr = &stderr
+	
+	err = pushCmd.Run()
+	if err != nil {
+			return fmt.Errorf("push failed: %v\nStdout: %s\nStderr: %s", 
+					err, stdout.String(), stderr.String())
+	}
+	
+	return nil 
 }
 
 func (repo *GitRepo) IsClean() (bool, error) {
