@@ -231,6 +231,7 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.showCommit = true
 					m.commitInput.Focus()
 					m.commitInput.SetValue("")
+					return m, nil
 				}
 			}
 		
@@ -258,6 +259,7 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if time.Since(m.messageTime) >= 3*time.Second {
 			m.message = ""
 		}
+		return m, nil
 	
 	case error:
 		m.showMessage(msg.Error())
