@@ -122,38 +122,33 @@ func (repo *GitRepo) Commit(message string) error {
 }
 
 func (repo *GitRepo) Push() error {
-	currentBranch, err := repo.GetCurrentBranch()
-
-	if err != nil {
-		return err
-	} 
-
-	cmd := exec.Command("git", "status")
-	os.Environ()
-	cmd.Dir = repo.WorkDir
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err = cmd.Run()
-	if err != nil {
-			fmt.Printf("Commit failed: %v\n", err)
-			fmt.Printf("Stdout: %s\n", stdout.String())
-			fmt.Printf("Stderr: %s\n", stderr.String())
-	}
-
-	cmd = exec.Command("git", "push", "origin", currentBranch)
-	os.Environ()
-	cmd.Dir = repo.WorkDir
-
-	err = cmd.Run()
-	if err != nil {
-			fmt.Printf("Commit failed: %v\n", err)
-			fmt.Printf("Stdout: %s\n", stdout.String())
-			fmt.Printf("Stderr: %s\n", stderr.String())
-	}
-	return cmd.Run()
+    currentBranch, err := repo.GetCurrentBranch()
+    if err != nil {
+        return err
+    }
+    
+    // Warmup with git status
+    statusCmd := exec.Command("git", "status")
+    statusCmd.Env = os.Environ() // Actually assign the environment
+    statusCmd.Dir = repo.WorkDir
+    statusCmd.Run() // Just run it, ignore output for warmup
+    
+    // Now push
+    pushCmd := exec.Command("git", "push", "origin", currentBranch)
+    pushCmd.Env = os.Environ() // Assign environment
+    pushCmd.Dir = repo.WorkDir
+    
+    var stdout, stderr bytes.Buffer
+    pushCmd.Stdout = &stdout
+    pushCmd.Stderr = &stderr
+    
+    err = pushCmd.Run() // Only run once
+    if err != nil {
+        return fmt.Errorf("push failed: %v\nStdout: %s\nStderr: %s", 
+            err, stdout.String(), stderr.String())
+    }
+    
+    return nil // Don't call cmd.Run() again
 }
 
 func (repo *GitRepo) IsClean() (bool, error) {
