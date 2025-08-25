@@ -174,7 +174,7 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			
 		case "r":
-			if !m.showCommit {
+			if !m.showCommit && !m.showSearch {
 				return m, tea.Batch(
 					func() tea.Msg { return loadingMsg("Refreshing status...") },
 					m.refreshStatus,
