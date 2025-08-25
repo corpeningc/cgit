@@ -56,7 +56,6 @@ type StatusModel struct {
 type refreshMsg struct{}
 type statusMsg *git.RepoStatus
 type diffMsg string
-type messageTimeoutMsg struct{}
 
 func NewStatusModel(repo *git.GitRepo) StatusModel {
 	vp := viewport.New(0, 0)
