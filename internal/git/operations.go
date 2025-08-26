@@ -492,6 +492,18 @@ func (repo *GitRepo) StashPop() error {
 	return formatCommandError("pop stash", err, stdout, stderr)
 }
 
+func (repo *GitRepo) DeleteStash(index int) error {
+	cmd := exec.Command("git", "stash", "drop", fmt.Sprintf("stash@{%d}", index))
+	cmd.Dir = repo.WorkDir
+	
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	
+	err := cmd.Run()
+	return formatCommandError("delete stash", err, stdout, stderr)
+}
+
 func (repo *GitRepo) FullClean() error {
 	cmd := exec.Command("git", "reset", "--hard")
 	cmd.Dir = repo.WorkDir

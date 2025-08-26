@@ -66,6 +66,10 @@ type refreshMsg struct{}
 type statusMsg *git.RepoStatus
 type diffMsg string
 type loadingMsg string
+type fileStatusUpdateMsg struct {
+	filePath string
+	staged   bool
+}
 
 func NewStatusModel(repo *git.GitRepo) StatusModel {
 	vp := viewport.New(0, 0)
@@ -277,7 +281,11 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			
 		case "d":
 			if !m.showCommit && !m.showSearch {
-				return m, m.discardChanges
+				if m.currentPanel == StashesPanel {
+					return m, m.deleteStash
+				} else {
+					return m, m.discardChanges
+				}
 			}
 			
 		case "a":
@@ -331,7 +339,10 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.isLoading = true
 		m.loadingMsg = string(msg)
 		return m, nil
-		
+	
+	case fileStatusUpdateMsg:
+		m.handleFileStatusUpdate(msg)
+		return m, nil
 	
 	case error:
 		m.showMessage(msg.Error())
@@ -782,14 +793,14 @@ func (m StatusModel) highlightDiff(content string) string {
 
 func (m StatusModel) renderHelp() string {
 	if m.showSearch {
-		return m.helpStyle.Render("j/k: navigate results | enter: select | esc: cancel | q: quit")
+		return m.helpStyle.Render("j/k: navigate results | s: stage | u: unstage | enter: select | esc: cancel | q: quit")
 	} else if m.showCommit {
 		return m.helpStyle.Render("enter: commit | esc: cancel | q: quit")
 	} else if m.showDiff {
 		return m.helpStyle.Render("esc: back | q: quit")
 	}
 	
-	help := "h/l: panels | j/k: navigate | /: search | s: stage | u: unstage | d: discard | c: commit | p: push | enter: diff/switch | r: refresh | q: quit"
+	help := "h/l: panels | j/k: navigate | /: search | s: stage | u: unstage | d: discard/delete | c: commit | p: push | enter: diff/switch | r: refresh | q: quit"
 	return m.helpStyle.Render(help)
 }
 
@@ -860,33 +871,33 @@ func (m StatusModel) refreshStatus() tea.Msg {
 func (m StatusModel) stageFile() tea.Msg {
 	if m.repoStatus == nil || m.currentPanel != UnstagedPanel || 
 	   m.selectedIndex >= len(m.repoStatus.UnstagedFiles) {
-		return refreshMsg{}
+		return nil
 	}
 	
 	file := m.repoStatus.UnstagedFiles[m.selectedIndex]
 	err := m.repo.StageFile(file.Path)
 	if err != nil {
-		// Handle error
-		return refreshMsg{}
+		return fmt.Errorf("failed to stage file: %v", err)
 	}
 	
-	return refreshMsg{}
+	// Update status locally without full refresh
+	return m.updateFileStatus(file, true)
 }
 
 func (m StatusModel) unstageFile() tea.Msg {
 	if m.repoStatus == nil || m.currentPanel != StagedPanel || 
 	   m.selectedIndex >= len(m.repoStatus.StagedFiles) {
-		return refreshMsg{}
+		return nil
 	}
 	
 	file := m.repoStatus.StagedFiles[m.selectedIndex]
 	err := m.repo.UnstageFile(file.Path, file.Status)
 	if err != nil {
-		// Handle error - show error message
 		return fmt.Errorf("failed to unstage file: %v", err)
 	}
 	
-	return refreshMsg{}
+	// Update status locally without full refresh
+	return m.updateFileStatus(file, false)
 }
 
 func (m StatusModel) discardChanges() tea.Msg {
@@ -1078,6 +1089,115 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// updateFileStatus moves a file between staged/unstaged without full refresh
+func (m StatusModel) updateFileStatus(file git.FileStatus, toStaged bool) tea.Msg {
+	return fileStatusUpdateMsg{
+		filePath: file.Path,
+		staged:   toStaged,
+	}
+}
+
+// handleFileStatusUpdate moves a file between staged/unstaged lists locally
+func (m *StatusModel) handleFileStatusUpdate(msg fileStatusUpdateMsg) {
+	if m.repoStatus == nil {
+		return
+	}
+
+	if msg.staged {
+		// Move from unstaged to staged
+		for i, file := range m.repoStatus.UnstagedFiles {
+			if file.Path == msg.filePath {
+				// Remove from unstaged
+				m.repoStatus.UnstagedFiles = append(m.repoStatus.UnstagedFiles[:i], m.repoStatus.UnstagedFiles[i+1:]...)
+				// Add to staged
+				file.Staged = true
+				file.WorkTree = false
+				m.repoStatus.StagedFiles = append(m.repoStatus.StagedFiles, file)
+				// Adjust selection
+				if m.selectedIndex >= len(m.repoStatus.UnstagedFiles) {
+					m.selectedIndex = max(0, len(m.repoStatus.UnstagedFiles)-1)
+				}
+				break
+			}
+		}
+	} else {
+		// Move from staged to unstaged
+		for i, file := range m.repoStatus.StagedFiles {
+			if file.Path == msg.filePath {
+				// Remove from staged
+				m.repoStatus.StagedFiles = append(m.repoStatus.StagedFiles[:i], m.repoStatus.StagedFiles[i+1:]...)
+				// Add to unstaged
+				file.Staged = false
+				file.WorkTree = true
+				m.repoStatus.UnstagedFiles = append(m.repoStatus.UnstagedFiles, file)
+				// Adjust selection
+				if m.selectedIndex >= len(m.repoStatus.StagedFiles) {
+					m.selectedIndex = max(0, len(m.repoStatus.StagedFiles)-1)
+				}
+				break
+			}
+		}
+	}
+}
+
+// stageFileFromSearch stages a file from search results
+func (m StatusModel) stageFileFromSearch() tea.Msg {
+	if m.repoStatus == nil || m.currentPanel != UnstagedPanel || 
+	   len(m.filteredIndices) == 0 || m.searchSelected >= len(m.filteredIndices) {
+		return nil
+	}
+	
+	actualIndex := m.filteredIndices[m.searchSelected]
+	if actualIndex >= len(m.repoStatus.UnstagedFiles) {
+		return nil
+	}
+	
+	file := m.repoStatus.UnstagedFiles[actualIndex]
+	err := m.repo.StageFile(file.Path)
+	if err != nil {
+		return fmt.Errorf("failed to stage file: %v", err)
+	}
+	
+	return m.updateFileStatus(file, true)
+}
+
+// unstageFileFromSearch unstages a file from search results
+func (m StatusModel) unstageFileFromSearch() tea.Msg {
+	if m.repoStatus == nil || m.currentPanel != StagedPanel || 
+	   len(m.filteredIndices) == 0 || m.searchSelected >= len(m.filteredIndices) {
+		return nil
+	}
+	
+	actualIndex := m.filteredIndices[m.searchSelected]
+	if actualIndex >= len(m.repoStatus.StagedFiles) {
+		return nil
+	}
+	
+	file := m.repoStatus.StagedFiles[actualIndex]
+	err := m.repo.UnstageFile(file.Path, file.Status)
+	if err != nil {
+		return fmt.Errorf("failed to unstage file: %v", err)
+	}
+	
+	return m.updateFileStatus(file, false)
+}
+
+// deleteStash deletes the selected stash
+func (m StatusModel) deleteStash() tea.Msg {
+	if m.repoStatus == nil || m.currentPanel != StashesPanel || 
+	   m.selectedIndex >= len(m.repoStatus.Stashes) {
+		return nil
+	}
+	
+	stash := m.repoStatus.Stashes[m.selectedIndex]
+	err := m.repo.DeleteStash(stash.Index)
+	if err != nil {
+		return fmt.Errorf("failed to delete stash: %v", err)
+	}
+	
+	return refreshMsg{}
 }
 
 func StartStatusTUI(repo *git.GitRepo) error {
