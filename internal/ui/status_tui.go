@@ -237,7 +237,9 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			
 		case "j", "down":
-			if m.showSearch {
+			if m.showDiff {
+				m.viewport.LineDown(1)
+			} else if m.showSearch {
 				// Navigate down in search results
 				if len(m.filteredIndices) > 0 {
 					m.searchSelected = (m.searchSelected + 1) % len(m.filteredIndices)
@@ -247,7 +249,9 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			
 		case "k", "up":
-			if m.showSearch {
+			if m.showDiff {
+				m.viewport.LineUp(1)
+			} else if m.showSearch {
 				// Navigate up in search results
 				if len(m.filteredIndices) > 0 {
 					m.searchSelected = (m.searchSelected - 1 + len(m.filteredIndices)) % len(m.filteredIndices)
@@ -257,12 +261,16 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			
 		case "g":
-			if !m.showCommit && !m.showSearch {
+			if m.showDiff {
+				m.viewport.GotoTop()
+			} else if !m.showCommit && !m.showSearch {
 				m.selectedIndex = 0
 			}
 			
 		case "G":
-			if !m.showCommit && !m.showSearch {
+			if m.showDiff {
+				m.viewport.GotoBottom()
+			} else if !m.showCommit && !m.showSearch {
 				count := m.getCurrentFileCount()
 				if count > 0 {
 					m.selectedIndex = count - 1
@@ -316,6 +324,16 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.searchInput.SetValue("")
 				return m, nil
 			}
+		
+		case "ctrl+d", "pgdn":
+			if m.showDiff {
+				m.viewport.HalfViewDown()
+			}
+			
+		case "ctrl+u", "pgup":
+			if m.showDiff {
+				m.viewport.HalfViewUp()
+			}
 		}
 		
 	case statusMsg:
@@ -328,7 +346,9 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case diffMsg:
 		m.diffContent = string(msg)
 		m.showDiff = true
-		m.viewport.SetContent(m.diffContent)
+		// Apply syntax highlighting and set content
+		highlightedContent := m.highlightDiff(m.diffContent)
+		m.viewport.SetContent(highlightedContent)
 		
 	case refreshMsg:
 		m.isLoading = true
@@ -750,14 +770,7 @@ func (m StatusModel) renderSearchView() string {
 }
 
 func (m StatusModel) renderDiffView() string {
-	if m.diffContent == "" {
-		return m.viewport.View()
-	}
-	
-	// Apply syntax highlighting to diff content
-	highlightedContent := m.highlightDiff(m.diffContent)
-	m.viewport.SetContent(highlightedContent)
-	
+	// Just return the viewport view - content is set when diffMsg is received
 	return m.viewport.View()
 }
 
@@ -797,7 +810,7 @@ func (m StatusModel) renderHelp() string {
 	} else if m.showCommit {
 		return m.helpStyle.Render("enter: commit | esc: cancel | q: quit")
 	} else if m.showDiff {
-		return m.helpStyle.Render("esc: back | q: quit")
+		return m.helpStyle.Render("j/k: scroll | g/G: top/bottom | ctrl+d/u: page | esc: back | q: quit")
 	}
 	
 	help := "h/l: panels | j/k: navigate | /: search | s: stage | u: unstage | d: discard/delete | c: commit | p: push | enter: diff/switch | r: refresh | q: quit"
