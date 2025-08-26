@@ -23,12 +23,28 @@ type RepoStatus struct {
 	StagedFiles   []FileStatus
 	UnstagedFiles []FileStatus
 	LastCommit    CommitInfo
+	Branches      []BranchInfo
+	Stashes       []StashInfo
 }
 
 type CommitInfo struct {
 	Hash    string
 	Message string
 	Author  string
+	Date    string
+}
+
+type BranchInfo struct {
+	Name      string
+	IsRemote  bool
+	IsCurrent bool
+	Tracking  string
+}
+
+type StashInfo struct {
+	Index   int
+	Message string
+	Branch  string
 	Date    string
 }
 
@@ -264,6 +280,18 @@ func (repo *GitRepo) GetRepositoryStatus() (*RepoStatus, error) {
 		status.LastCommit = commitInfo
 	}
 	
+	// Get branches
+	branches, err := repo.GetBranches()
+	if err == nil {
+		status.Branches = branches
+	}
+	
+	// Get stashes
+	stashes, err := repo.GetStashes()
+	if err == nil {
+		status.Stashes = stashes
+	}
+	
 	return status, nil
 }
 
@@ -464,6 +492,18 @@ func (repo *GitRepo) StashPop() error {
 	return formatCommandError("pop stash", err, stdout, stderr)
 }
 
+func (repo *GitRepo) DeleteStash(index int) error {
+	cmd := exec.Command("git", "stash", "drop", fmt.Sprintf("stash@{%d}", index))
+	cmd.Dir = repo.WorkDir
+	
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	
+	err := cmd.Run()
+	return formatCommandError("delete stash", err, stdout, stderr)
+}
+
 func (repo *GitRepo) FullClean() error {
 	cmd := exec.Command("git", "reset", "--hard")
 	cmd.Dir = repo.WorkDir
@@ -486,4 +526,112 @@ func (repo *GitRepo) FullClean() error {
 	
 	err = cleanCmd.Run()
 	return formatCommandError("clean -fd", err, cleanStdout, cleanStderr)
+}
+
+func (repo *GitRepo) GetBranches() ([]BranchInfo, error) {
+	cmd := exec.Command("git", "branch", "-vv", "-a")
+	cmd.Dir = repo.WorkDir
+	
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get branches: %v", err)
+	}
+	
+	var branches []BranchInfo
+	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		
+		isCurrent := strings.HasPrefix(line, "* ")
+		if isCurrent {
+			line = line[2:]
+		} else if strings.HasPrefix(line, "  ") {
+			line = line[2:]
+		}
+		
+		parts := strings.Fields(line)
+		if len(parts) == 0 {
+			continue
+		}
+		
+		branchName := parts[0]
+		isRemote := strings.HasPrefix(branchName, "remotes/")
+		if isRemote {
+			branchName = strings.TrimPrefix(branchName, "remotes/")
+		}
+		
+		tracking := ""
+		if len(parts) >= 3 && strings.HasPrefix(parts[2], "[") {
+			for i := 2; i < len(parts); i++ {
+				if strings.HasSuffix(parts[i], "]") {
+					tracking = strings.Join(parts[2:i+1], " ")
+					tracking = strings.Trim(tracking, "[]")
+					break
+				}
+			}
+		}
+		
+		branches = append(branches, BranchInfo{
+			Name:      branchName,
+			IsRemote:  isRemote,
+			IsCurrent: isCurrent,
+			Tracking:  tracking,
+		})
+	}
+	
+	return branches, nil
+}
+
+func (repo *GitRepo) GetStashes() ([]StashInfo, error) {
+	cmd := exec.Command("git", "stash", "list", "--format=%gd|%s|%gs|%cr")
+	cmd.Dir = repo.WorkDir
+	
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stashes: %v", err)
+	}
+	
+	var stashes []StashInfo
+	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			continue
+		}
+		
+		parts := strings.Split(line, "|")
+		if len(parts) != 4 {
+			continue
+		}
+		
+		indexStr := strings.TrimPrefix(parts[0], "stash@{")
+		indexStr = strings.TrimSuffix(indexStr, "}")
+		index := 0
+		fmt.Sscanf(indexStr, "%d", &index)
+		
+		message := parts[1]
+		branch := parts[2]
+		date := parts[3]
+		
+		if strings.HasPrefix(branch, "WIP on ") {
+			branch = strings.TrimPrefix(branch, "WIP on ")
+			if colonIndex := strings.Index(branch, ":"); colonIndex != -1 {
+				branch = branch[:colonIndex]
+			}
+		}
+		
+		stashes = append(stashes, StashInfo{
+			Index:   index,
+			Message: message,
+			Branch:  branch,
+			Date:    date,
+		})
+	}
+	
+	return stashes, nil
 }

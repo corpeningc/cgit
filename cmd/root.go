@@ -43,23 +43,27 @@ func init() {
 
 var addCmd = &cobra.Command{
 	Use: "add",
-	Short: "Interactively add files to staging",
+	Short: "Interactively add files to staging with search support",
+	Long: "Launch an interactive file picker for selecting and staging files with fuzzy search capabilities. " +
+		"Use /: to search, space: to select files, enter: to stage selected files.",
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
 
-		files, err := repo.GetModifiedFiles()
-		handleError("getting modified files", err)
+		// Get unstaged files only
+		repoStatus, err := repo.GetRepositoryStatus()
+		handleError("getting repository status", err)
 
-		if len(files) == 0 {
-			fmt.Println("No modified files to add.")
+		if len(repoStatus.UnstagedFiles) == 0 {
+			fmt.Println("No unstaged files to add.")
 			return
 		}
 
-		selected, err := ui.SelectFiles(files)
+		selected, err := ui.SelectUnstagedFilesWithSearch(repoStatus.UnstagedFiles)
 		handleError("selecting files", err)
 
-		if (len(selected) == 0) {
+		if len(selected) == 0 {
 			fmt.Println("No files selected.")
+			return
 		}
 
 		err = repo.AddFiles(selected)
