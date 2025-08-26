@@ -147,7 +147,7 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.viewport.Width = msg.Width - 4
-		m.viewport.Height = msg.Height - 12
+		m.viewport.Height = msg.Height - 6  // Leave space for header, help, and padding
 		
 	case tea.KeyMsg:
 		if m.quitting {
@@ -364,9 +364,16 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case diffMsg:
 		m.diffContent = string(msg)
 		m.showDiff = true
+		// Ensure viewport is properly sized before setting content
+		if m.width > 0 && m.height > 0 {
+			m.viewport.Width = m.width - 4
+			m.viewport.Height = m.height - 6
+		}
 		// Apply syntax highlighting and set content
 		highlightedContent := m.highlightDiff(m.diffContent)
 		m.viewport.SetContent(highlightedContent)
+		// Reset viewport position to top
+		m.viewport.GotoTop()
 		
 	case refreshMsg:
 		m.isLoading = true
