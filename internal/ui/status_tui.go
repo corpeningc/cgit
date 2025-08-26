@@ -369,9 +369,10 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.Width = m.width - 4
 			m.viewport.Height = m.height - 6
 		}
-		// Apply syntax highlighting and set content
-		highlightedContent := m.highlightDiff(m.diffContent)
-		m.viewport.SetContent(highlightedContent)
+		// Temporarily disable highlighting to debug the display issue
+		// highlightedContent := m.highlightDiff(m.diffContent)
+		// m.viewport.SetContent(highlightedContent)
+		m.viewport.SetContent(m.diffContent)
 		// Reset viewport position to top
 		m.viewport.GotoTop()
 		
