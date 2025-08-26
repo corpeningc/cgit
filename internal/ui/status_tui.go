@@ -282,6 +282,24 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.stageFile
 			}
 			
+		case "+":
+			if !m.showCommit {
+				if m.showSearch {
+					return m, m.stageFileFromSearch
+				} else {
+					return m, m.stageFile
+				}
+			}
+			
+		case "-":
+			if !m.showCommit {
+				if m.showSearch {
+					return m, m.unstageFileFromSearch
+				} else {
+					return m, m.unstageFile
+				}
+			}
+			
 		case "u":
 			if !m.showCommit && !m.showSearch {
 				return m, m.unstageFile
@@ -806,14 +824,14 @@ func (m StatusModel) highlightDiff(content string) string {
 
 func (m StatusModel) renderHelp() string {
 	if m.showSearch {
-		return m.helpStyle.Render("j/k: navigate results | s: stage | u: unstage | enter: select | esc: cancel | q: quit")
+		return m.helpStyle.Render("j/k: navigate results | +: stage | -: unstage | enter: select | esc: cancel | q: quit")
 	} else if m.showCommit {
 		return m.helpStyle.Render("enter: commit | esc: cancel | q: quit")
 	} else if m.showDiff {
 		return m.helpStyle.Render("j/k: scroll | g/G: top/bottom | ctrl+d/u: page | esc: back | q: quit")
 	}
 	
-	help := "h/l: panels | j/k: navigate | /: search | s: stage | u: unstage | d: discard/delete | c: commit | p: push | enter: diff/switch | r: refresh | q: quit"
+	help := "h/l: panels | j/k: navigate | /: search | s/+: stage | u/-: unstage | d: discard/delete | c: commit | p: push | enter: diff/switch | r: refresh | q: quit"
 	return m.helpStyle.Render(help)
 }
 
@@ -883,7 +901,7 @@ func (m StatusModel) refreshStatus() tea.Msg {
 
 func (m StatusModel) stageFile() tea.Msg {
 	if m.repoStatus == nil || m.currentPanel != UnstagedPanel || 
-	   m.selectedIndex >= len(m.repoStatus.UnstagedFiles) {
+		m.selectedIndex >= len(m.repoStatus.UnstagedFiles) {
 		return nil
 	}
 	
@@ -899,7 +917,7 @@ func (m StatusModel) stageFile() tea.Msg {
 
 func (m StatusModel) unstageFile() tea.Msg {
 	if m.repoStatus == nil || m.currentPanel != StagedPanel || 
-	   m.selectedIndex >= len(m.repoStatus.StagedFiles) {
+		m.selectedIndex >= len(m.repoStatus.StagedFiles) {
 		return nil
 	}
 	
@@ -915,7 +933,7 @@ func (m StatusModel) unstageFile() tea.Msg {
 
 func (m StatusModel) discardChanges() tea.Msg {
 	if m.repoStatus == nil || m.currentPanel != UnstagedPanel || 
-	   m.selectedIndex >= len(m.repoStatus.UnstagedFiles) {
+		m.selectedIndex >= len(m.repoStatus.UnstagedFiles) {
 		return refreshMsg{}
 	}
 	
@@ -1044,7 +1062,7 @@ func (m *StatusModel) performSearch() {
 	case StashesPanel:
 		for i, stash := range m.repoStatus.Stashes {
 			if m.fuzzyMatch(strings.ToLower(stash.Message), query) || 
-			   m.fuzzyMatch(strings.ToLower(stash.Branch), query) {
+				m.fuzzyMatch(strings.ToLower(stash.Branch), query) {
 				m.filteredIndices = append(m.filteredIndices, i)
 			}
 		}
@@ -1158,7 +1176,7 @@ func (m *StatusModel) handleFileStatusUpdate(msg fileStatusUpdateMsg) {
 // stageFileFromSearch stages a file from search results
 func (m StatusModel) stageFileFromSearch() tea.Msg {
 	if m.repoStatus == nil || m.currentPanel != UnstagedPanel || 
-	   len(m.filteredIndices) == 0 || m.searchSelected >= len(m.filteredIndices) {
+		len(m.filteredIndices) == 0 || m.searchSelected >= len(m.filteredIndices) {
 		return nil
 	}
 	
@@ -1179,7 +1197,7 @@ func (m StatusModel) stageFileFromSearch() tea.Msg {
 // unstageFileFromSearch unstages a file from search results
 func (m StatusModel) unstageFileFromSearch() tea.Msg {
 	if m.repoStatus == nil || m.currentPanel != StagedPanel || 
-	   len(m.filteredIndices) == 0 || m.searchSelected >= len(m.filteredIndices) {
+		len(m.filteredIndices) == 0 || m.searchSelected >= len(m.filteredIndices) {
 		return nil
 	}
 	
@@ -1200,7 +1218,7 @@ func (m StatusModel) unstageFileFromSearch() tea.Msg {
 // deleteStash deletes the selected stash
 func (m StatusModel) deleteStash() tea.Msg {
 	if m.repoStatus == nil || m.currentPanel != StashesPanel || 
-	   m.selectedIndex >= len(m.repoStatus.Stashes) {
+		m.selectedIndex >= len(m.repoStatus.Stashes) {
 		return nil
 	}
 	
