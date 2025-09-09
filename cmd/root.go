@@ -35,7 +35,6 @@ func init() {
 	rootCmd.AddCommand(commitCmd)
 	rootCmd.AddCommand(pushCmd)
 	rootCmd.AddCommand(newBranchCmd)
-	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(switchBranchCmd)
 	rootCmd.AddCommand(stashPopCmd)
 	rootCmd.AddCommand(fullCleanCmd)
@@ -155,18 +154,6 @@ var newBranchCmd = &cobra.Command {
 	},
 }
 
-var statusCmd = &cobra.Command{
-	Use:     "status",
-	Aliases: []string{"st"},
-	Short:   "Interactive git status with staging capabilities",
-	Long:    "Launch an interactive TUI for viewing repository status, staging/unstaging files, and committing changes with vim-style navigation",
-	Run: func(cmd *cobra.Command, args []string) {
-		repo := git.New(".")
-
-		err := ui.StartStatusTUI(repo)
-		handleError("starting status TUI", err)
-	},
-}
 
 var switchBranchCmd = &cobra.Command{
 	Use: "switch",
