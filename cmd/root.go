@@ -275,9 +275,15 @@ var pullCmd = &cobra.Command{
 	Short: "Pull latest changes from remote",
 	Run: func(cmd *cobra.Command, args [] string) {
 		repo := git.New(".")
-		branchName := args[0]
+		// If no branch provided, use current branch
+		branchName, err := repo.GetCurrentBranch()
+		handleError("getting current branch", err)
 
-		err := repo.PullLatestRemote(branchName)
+		if len(args) > 0 {
+			branchName = args[0]
+		}
+
+		err = repo.PullLatestRemote(branchName)
 		handleError("pulling latest changes", err)
 
 		fmt.Println("Successfully pulled latest changes for branch", branchName)
