@@ -141,7 +141,6 @@ func (repo *GitRepo) MergeLatest(branch string) error {
 		return err
 	}
 
-	// Merge remote into current
 	cmd := exec.Command("git", "merge", "origin/"+branch)
 	cmd.Dir = repo.WorkDir
 	
@@ -349,3 +348,45 @@ func (repo *GitRepo) FullClean() error {
 	return formatCommandError("clean -fd", err, cleanStdout, cleanStderr)
 }
 
+func (repo *GitRepo) GetAllBranches(remote bool) ([]string, error) {
+	getBranchCmd := exec.Command("git", "branch", "-a")
+	getBranchCmd.Dir = repo.WorkDir
+
+	var stdout, stderr bytes.Buffer
+	getBranchCmd.Stdout = &stdout
+	getBranchCmd.Stderr = &stderr
+
+	err := getBranchCmd.Run()
+	if err != nil {
+		return nil, formatCommandError("get branches", err, stdout, stderr)
+	}
+
+	var branches []string
+	scanner := bufio.NewScanner(&stdout)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		if strings.HasPrefix(line, "* ") {
+			line = strings.TrimSpace(line[2:])
+		}
+
+		if strings.Contains(line, "remotes/origin/HEAD") {
+			continue
+		}
+
+		if strings.HasPrefix(line, "remotes/") {
+			if remote {
+				branch := strings.TrimPrefix(line, "remotes/origin/")
+				branches = append(branches, branch)
+			} else {
+				continue
+			}
+		}
+
+		if line != "" {
+			branches = append(branches, line)
+		}
+	}
+
+	return branches, nil
+}

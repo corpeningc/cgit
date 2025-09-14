@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/corpeningc/cgit/internal/git"
@@ -22,7 +23,16 @@ var rootCmd = &cobra.Command{
 	Use: "cgit",
 	Short: "A simplified git workflow tool",
 	Long: "Simplifies common git operations with interactive interfaces",
+	PersistentPreRun: func (cmd *cobra.Command, args []string) {
+		_, err := exec.LookPath("git")
+		handleError("checking for git installation", err)
+
+		repo := git.New(".")
+		_, err = repo.GetCurrentBranch()
+		handleError("checking for git repository", err)	
+	},
 }
+
 
 func Execute() error {
 	return rootCmd.Execute()
@@ -35,9 +45,16 @@ func init() {
 	rootCmd.AddCommand(commitCmd)
 	rootCmd.AddCommand(pushCmd)
 	rootCmd.AddCommand(newBranchCmd)
+	
+	switchBranchCmd.Flags().BoolP("remote", "r", false, "Include remote branches in the branch list")
 	rootCmd.AddCommand(switchBranchCmd)
+
 	rootCmd.AddCommand(stashPopCmd)
 	rootCmd.AddCommand(fullCleanCmd)
+	rootCmd.AddCommand(pullCmd)
+
+	featureCmd.Flags().StringP("origin", "o", "main", "The branch to pull latest changes from before creating the feature branch")
+	rootCmd.AddCommand(featureCmd)
 }
 
 var addCmd = &cobra.Command{
@@ -159,6 +176,22 @@ var switchBranchCmd = &cobra.Command{
 	Use: "switch",
 	Aliases: []string{"sw"},
 	Short: "Switch to an existing branch",
+	ValidArgsFunction: func (cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		repo := git.New(".")
+		remote, err := cmd.Flags().GetBool("remote")
+		
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+
+		branches, err := repo.GetAllBranches(remote)
+
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+
+		return branches, cobra.ShellCompDirectiveNoFileComp
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
 		branchName := args[0]
@@ -168,20 +201,38 @@ var switchBranchCmd = &cobra.Command{
 		handleError("checking repository status", err)
 
 		if !isClean {
-			fmt.Print("You need to stash your changes before swapping. Enter a stash name: ")
+			fmt.Println("You need to stash or delete your changes before swapping. Press 'd' to delete changes or 's' to enter a stash name")
 			reader := bufio.NewReader(os.Stdin)
-			stashName, err := reader.ReadString('\n')
+			// Read s or d input
+			input, err := reader.ReadString('\n')
 			handleError("reading stash name", err)
-			
-			stashName = strings.TrimSpace(stashName)
-			if stashName == "" {
-				fmt.Println("No stash name provided. Aborting switch.")
-				return
-			}
 
-			err = repo.Stash(stashName)
-			handleError("stashing changes", err)
-			fmt.Printf("Changes stashed as '%s'.\n", stashName)
+			input = strings.TrimSpace(input)
+			var stashName string
+
+			switch input {
+				case "d":
+					err = repo.FullClean()
+					handleError("deleting changes", err)
+					fmt.Println("Changes deleted.")
+					// Proceed to switch branches
+				case "s":
+					_, err = reader.Discard(0)
+
+					handleError("discarding input", err)
+					// Read stash name
+					fmt.Print("Enter stash name: ")
+					handleError("reading stash name", err)
+					stashName, err = reader.ReadString('\n')
+					stashName = strings.TrimSpace(stashName)
+					if stashName == "" {
+						fmt.Println("No stash name provided. Aborting switch.")
+						return
+					}
+					err = repo.Stash(stashName)
+					handleError("stashing changes", err)
+					fmt.Printf("Changes stashed as '%s'.\n", stashName)
+				}
 		}
 
 		err = repo.SwitchBranch(branchName)
@@ -216,5 +267,43 @@ var fullCleanCmd = &cobra.Command{
 		handleError("performing full clean", err)
 
 		fmt.Println("Successfully cleaned repository.")
+	},
+}
+
+var pullCmd = &cobra.Command{
+	Use: "pull",
+	Short: "Pull latest changes from remote",
+	Run: func(cmd *cobra.Command, args [] string) {
+		repo := git.New(".")
+		branchName := args[0]
+
+		err := repo.PullLatestRemote(branchName)
+		handleError("pulling latest changes", err)
+
+		fmt.Println("Successfully pulled latest changes for branch", branchName)
+	},
+}
+
+var featureCmd = &cobra.Command{
+	Use: "feature",
+	Aliases: []string{"f"},
+	Short: "Pull latest from main, create and switch to a new feature branch",
+	Run: func(cmd *cobra.Command, args []string) {
+		repo := git.New(".")
+		origin, err := cmd.Flags().GetString("origin")
+
+		handleError("getting origin flag", err)
+		
+		branchName := args[0]
+		err = repo.PullLatestRemote(origin)
+		handleError("pulling latest changes", err)
+
+		err = repo.SwitchBranch(origin)
+		handleError("switching to origin branch", err)
+
+		err = repo.CreateBranch(branchName)
+		handleError("creating feature branch", err)
+
+		fmt.Println("Successfully created and switched to feature branch", branchName)
 	},
 }
