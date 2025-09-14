@@ -25,10 +25,5 @@ go install "github.com/corpeningc/cgit@latest"
 ## Usage
 
 ```bash
-cgit add         # Interactive file picker for staging
-cgit cap "msg"   # Commit and push in one command
-cgit nb feature  # Create and switch to new branch
-cgit sw branch   # Switch to existing branch
+cgit          # See all available commands
 ```
-
-**Note**: The interactive git status dashboard has been moved to a separate tool: [git-tui](https://github.com/corpeningc/git-tui)
