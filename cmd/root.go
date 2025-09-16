@@ -340,6 +340,10 @@ var featureCmd = &cobra.Command{
 
 			err = repo.DeleteBranch(branchName)
 			handleError("deleting feature branch", err)
+
+			err = repo.Push()
+			handleError("pushing changes", err)
+			fmt.Printf("Successfully pushed changes.")
 		}
 	},
 }
