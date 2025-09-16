@@ -107,22 +107,22 @@ func (m DiffViewerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "j", "down":
-			m.viewport.LineDown(1)
+			m.viewport.ScrollDown(1)
 
 		case "k", "up":
-			m.viewport.LineUp(1)
+			m.viewport.ScrollUp(1)
 
 		case "d", "ctrl+d":
-			m.viewport.HalfViewDown()
+			m.viewport.HalfPageDown()
 
 		case "u", "ctrl+u":
-			m.viewport.HalfViewUp()
+			m.viewport.HalfPageUp()
 
 		case "f", "pgdn":
-			m.viewport.ViewDown()
+			m.viewport.PageDown()
 
 		case "b", "pgup":
-			m.viewport.ViewUp()
+			m.viewport.PageUp()
 
 		case "g", "home":
 			m.viewport.GotoTop()
