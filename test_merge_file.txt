@@ -1,3 +1,0 @@
-This is a test file to verify the merge functionality.
-Created on t/merge-test branch.
-Should appear in f/feature-flags after merge.
