@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/corpeningc/cgit/internal/git"
@@ -37,7 +36,6 @@ type FilePickerModel struct {
 	showStatusChars bool
 
 	// Scrolling support
-	viewport        viewport.Model
 	scrollOffset    int
 	visibleLines    int
 
