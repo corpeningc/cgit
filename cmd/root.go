@@ -327,17 +327,16 @@ var featureCmd = &cobra.Command{
 			branchName, err := repo.GetCurrentBranch()
 			handleError("getting close flag", err)
 
-			fmt.Printf("DEBUG: Origin branch is: %s\n", origin)
-			fmt.Printf("DEBUG: Current branch is: %s\n", branchName)
-
 			err = repo.SwitchBranch(origin)
 			handleError("switching to origin branch", err)
+			fmt.Printf("Switching to %s\n", origin)
 
 			err = repo.PullLatestRemote(origin)
 			handleError("pulling latest changes", err)
 
 			err = repo.MergeLocalBranch(branchName)
 			handleError("closing feature branch", err)
+			fmt.Printf("Successfully merged %s into %s\n", branchName, origin)
 
 			err = repo.DeleteBranch(branchName)
 			handleError("deleting feature branch", err)
