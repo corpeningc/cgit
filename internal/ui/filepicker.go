@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/corpeningc/cgit/internal/git"
@@ -15,9 +16,11 @@ type FilePickerMode int
 const (
 	NormalMode FilePickerMode = iota
 	SearchMode
+	DiffMode
 )
 
 type FilePickerModel struct {
+	repo            *git.GitRepo
 	files           []string
 	fileStatuses    []git.FileStatus
 	selectedFiles   map[string]bool
@@ -32,7 +35,15 @@ type FilePickerModel struct {
 	width          int
 	height         int
 	showStatusChars bool
-	
+
+	// Scrolling support
+	viewport        viewport.Model
+	scrollOffset    int
+	visibleLines    int
+
+	// Diff viewer
+	diffViewer     DiffViewerModel
+
 	// Styles
 	titleStyle      lipgloss.Style
 	selectedStyle   lipgloss.Style
@@ -42,79 +53,81 @@ type FilePickerModel struct {
 	searchStyle     lipgloss.Style
 }
 
-func NewFilePickerModel(files []string) FilePickerModel {
+func NewFilePickerModel(repo *git.GitRepo, files []string) FilePickerModel {
 	si := textinput.New()
 	si.Placeholder = "Search files..."
 	si.CharLimit = 100
 	si.Width = 50
-	
+
 	return FilePickerModel{
+		repo:          repo,
 		files:         files,
 		selectedFiles: make(map[string]bool),
 		searchInput:   si,
-		
+
 		// Initialize styles
 		titleStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("205")).
 			Bold(true),
-		
+
 		selectedStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("205")).
 			Bold(true),
-		
+
 		unselectedStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("245")),
-		
+
 		checkedStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("46")).
 			Bold(true),
-		
+
 		helpStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("245")),
-		
+
 		searchStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("39")).
 			Bold(true),
 	}
 }
 
-func NewFilePickerModelWithStatus(fileStatuses []git.FileStatus) FilePickerModel {
+func NewFilePickerModelWithStatus(repo *git.GitRepo, fileStatuses []git.FileStatus) FilePickerModel {
 	si := textinput.New()
 	si.Placeholder = "Search files..."
 	si.CharLimit = 100
 	si.Width = 50
-	
+
 	var files []string
 	for _, status := range fileStatuses {
 		files = append(files, status.Path)
 	}
-	
+
 	return FilePickerModel{
+		repo:            repo,
 		files:           files,
 		fileStatuses:    fileStatuses,
 		selectedFiles:   make(map[string]bool),
 		searchInput:     si,
 		showStatusChars: true,
-		
+
 		// Initialize styles
 		titleStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("205")).
 			Bold(true),
-		
+
 		selectedStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("205")).
 			Bold(true),
-		
+
 		unselectedStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("245")),
-		
+
 		checkedStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("46")).
 			Bold(true),
-		
+
 		helpStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("245")),
-		
+
 		searchStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("39")).
 			Bold(true),
@@ -127,22 +140,41 @@ func (m FilePickerModel) Init() tea.Cmd {
 
 func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	
+
+	// Handle diff mode separately
+	if m.mode == DiffMode {
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.String() {
+			case "esc", "q":
+				m.mode = NormalMode
+				return m, nil
+			}
+		}
+
+		updatedModel, cmd := m.diffViewer.Update(msg)
+		if diffModel, ok := updatedModel.(DiffViewerModel); ok {
+			m.diffViewer = diffModel
+		}
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		
+		m.visibleLines = msg.Height - 6 // Account for title, help, etc.
+
 	case tea.KeyMsg:
 		if m.quitting {
 			return m, tea.Quit
 		}
-		
+
 		switch msg.String() {
 		case "q", "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
-			
+
 		case "esc":
 			if m.mode == SearchMode {
 				m.mode = NormalMode
@@ -154,7 +186,7 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.quitting = true
 			return m, tea.Quit
-			
+
 		case "enter":
 			if m.mode == SearchMode {
 				// Select search result and exit search
@@ -165,11 +197,34 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.searchInput.SetValue("")
 				return m, nil
 			} else {
-				// Confirm selection
-				m.confirmed = true
-				m.quitting = true
-				return m, tea.Quit
+				// Show diff for current file
+				if len(m.files) > 0 {
+					filePath := m.files[m.currentIndex]
+					m.diffViewer = NewDiffViewerModel(m.repo, filePath)
+					m.mode = DiffMode
+
+					// Send window size to diff viewer if we have it
+					var cmds []tea.Cmd
+					cmds = append(cmds, m.diffViewer.Init())
+					if m.width > 0 && m.height > 0 {
+						sizeMsg := tea.WindowSizeMsg{Width: m.width, Height: m.height}
+						updatedModel, sizeCmd := m.diffViewer.Update(sizeMsg)
+						if diffModel, ok := updatedModel.(DiffViewerModel); ok {
+							m.diffViewer = diffModel
+						}
+						if sizeCmd != nil {
+							cmds = append(cmds, sizeCmd)
+						}
+					}
+					return m, tea.Batch(cmds...)
+				}
 			}
+
+		case "c", "ctrl+enter":
+			// Confirm selection (new binding)
+			m.confirmed = true
+			m.quitting = true
+			return m, tea.Quit
 			
 		case "/":
 			if m.mode == NormalMode {
@@ -186,12 +241,13 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.searchSelected = (m.searchSelected + 1) % len(m.filteredIndices)
 				}
 			} else {
-				// Navigate down in file list
+				// Navigate down in file list with scrolling
 				if len(m.files) > 0 {
 					m.currentIndex = (m.currentIndex + 1) % len(m.files)
+					m.adjustScrolling()
 				}
 			}
-			
+
 		case "k", "up":
 			if m.mode == SearchMode {
 				// Navigate up in search results
@@ -199,20 +255,23 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.searchSelected = (m.searchSelected - 1 + len(m.filteredIndices)) % len(m.filteredIndices)
 				}
 			} else {
-				// Navigate up in file list
+				// Navigate up in file list with scrolling
 				if len(m.files) > 0 {
 					m.currentIndex = (m.currentIndex - 1 + len(m.files)) % len(m.files)
+					m.adjustScrolling()
 				}
 			}
-			
+
 		case "g":
 			if m.mode == NormalMode {
 				m.currentIndex = 0
+				m.scrollOffset = 0
 			}
-			
+
 		case "G":
 			if m.mode == NormalMode && len(m.files) > 0 {
 				m.currentIndex = len(m.files) - 1
+				m.adjustScrolling()
 			}
 			
 		case " ", "s":
@@ -257,13 +316,18 @@ func (m FilePickerModel) View() string {
 	if m.quitting {
 		return ""
 	}
-	
+
+	// Handle diff mode
+	if m.mode == DiffMode {
+		return m.diffViewer.View()
+	}
+
 	var sections []string
-	
+
 	// Title
 	title := m.titleStyle.Render("Select files to add")
 	sections = append(sections, title)
-	
+
 	if m.mode == SearchMode {
 		// Show search input
 		searchTitle := m.searchStyle.Render("Search files:")
@@ -312,35 +376,50 @@ func (m FilePickerModel) View() string {
 			sections = append(sections, m.unselectedStyle.Render("Type to search..."))
 		}
 	} else {
-		// Show file list
+		// Show file list with scrolling
 		selectedCount := len(m.getSelectedFiles())
 		subtitle := fmt.Sprintf("(%d selected)", selectedCount)
 		sections = append(sections, m.unselectedStyle.Render(subtitle))
 		sections = append(sections, "")
-		
-		// Show files
-		for i, file := range m.files {
+
+		// Calculate visible range
+		startIdx := m.scrollOffset
+		endIdx := startIdx + m.visibleLines
+		if endIdx > len(m.files) {
+			endIdx = len(m.files)
+		}
+
+		// Show visible files
+		for i := startIdx; i < endIdx; i++ {
+			file := m.files[i]
 			prefix := "  "
 			style := m.unselectedStyle
-			
+
 			if i == m.currentIndex {
 				prefix = "> "
 				style = m.selectedStyle
 			}
-			
+
 			checkbox := "[ ]"
 			if m.selectedFiles[file] {
 				checkbox = m.checkedStyle.Render("[x]")
 			}
-			
+
 			// Add status character if available
 			statusChar := ""
 			if m.showStatusChars && i < len(m.fileStatuses) {
 				statusChar = fmt.Sprintf("[%s] ", m.fileStatuses[i].Status)
 			}
-			
+
 			line := fmt.Sprintf("%s%s %s%s", prefix, checkbox, statusChar, file)
 			sections = append(sections, style.Render(line))
+		}
+
+		// Show scroll indicator if needed
+		if len(m.files) > m.visibleLines {
+			scrollInfo := fmt.Sprintf("(%d-%d of %d)", startIdx+1, endIdx, len(m.files))
+			sections = append(sections, "")
+			sections = append(sections, m.helpStyle.Render(scrollInfo))
 		}
 	}
 	
@@ -349,12 +428,42 @@ func (m FilePickerModel) View() string {
 	if m.mode == SearchMode {
 		help = "j/k: navigate | space: select | enter: go to file | esc: back | q: quit"
 	} else {
-		help = "j/k: navigate | /: search | space: select | a: select all | A: deselect all | enter: confirm | q: quit"
+		help = "j/k: navigate | /: search | space: select | enter: view diff | c: confirm | a: select all | A: deselect all | q: quit"
 	}
 	sections = append(sections, "")
 	sections = append(sections, m.helpStyle.Render(help))
 	
 	return strings.Join(sections, "\n")
+}
+
+func (m *FilePickerModel) adjustScrolling() {
+	if m.visibleLines <= 0 {
+		return
+	}
+
+	// If current item is below visible area, scroll down
+	if m.currentIndex >= m.scrollOffset+m.visibleLines {
+		m.scrollOffset = m.currentIndex - m.visibleLines + 1
+	}
+
+	// If current item is above visible area, scroll up
+	if m.currentIndex < m.scrollOffset {
+		m.scrollOffset = m.currentIndex
+	}
+
+	// Ensure we don't scroll past the end
+	maxOffset := len(m.files) - m.visibleLines
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if m.scrollOffset > maxOffset {
+		m.scrollOffset = maxOffset
+	}
+
+	// Ensure we don't scroll before the beginning
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
+	}
 }
 
 func (m *FilePickerModel) performSearch() {
@@ -411,76 +520,76 @@ func (m FilePickerModel) getSelectedFiles() []string {
 	return selected
 }
 
-func SelectFiles(files []string) ([]string, error) {
+func SelectFiles(repo *git.GitRepo, files []string) ([]string, error) {
 	if len(files) == 0 {
 		return []string{}, nil
 	}
-	
-	m := NewFilePickerModel(files)
+
+	m := NewFilePickerModel(repo, files)
 	p := tea.NewProgram(m)
-	
+
 	finalModel, err := p.Run()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Type assert to get our model back
 	if model, ok := finalModel.(FilePickerModel); ok {
 		if model.confirmed {
 			return model.getSelectedFiles(), nil
 		}
 	}
-	
+
 	// User quit without confirming
 	return []string{}, nil
 }
 
 // SelectFilesWithSearch provides an enhanced file picker with fuzzy search capabilities
-func SelectFilesWithSearch(files []string) ([]string, error) {
+func SelectFilesWithSearch(repo *git.GitRepo, files []string) ([]string, error) {
 	if len(files) == 0 {
 		return []string{}, nil
 	}
-	
-	m := NewFilePickerModel(files)
+
+	m := NewFilePickerModel(repo, files)
 	p := tea.NewProgram(m, tea.WithAltScreen())
-	
+
 	finalModel, err := p.Run()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Type assert to get our model back
 	if model, ok := finalModel.(FilePickerModel); ok {
 		if model.confirmed {
 			return model.getSelectedFiles(), nil
 		}
 	}
-	
+
 	// User quit without confirming
 	return []string{}, nil
 }
 
 // SelectUnstagedFilesWithSearch provides an enhanced file picker specifically for unstaged files with status display
-func SelectUnstagedFilesWithSearch(fileStatuses []git.FileStatus) ([]string, error) {
+func SelectUnstagedFilesWithSearch(repo *git.GitRepo, fileStatuses []git.FileStatus) ([]string, error) {
 	if len(fileStatuses) == 0 {
 		return []string{}, nil
 	}
-	
-	m := NewFilePickerModelWithStatus(fileStatuses)
+
+	m := NewFilePickerModelWithStatus(repo, fileStatuses)
 	p := tea.NewProgram(m, tea.WithAltScreen())
-	
+
 	finalModel, err := p.Run()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Type assert to get our model back
 	if model, ok := finalModel.(FilePickerModel); ok {
 		if model.confirmed {
 			return model.getSelectedFiles(), nil
 		}
 	}
-	
+
 	// User quit without confirming
 	return []string{}, nil
 }

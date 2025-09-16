@@ -103,3 +103,55 @@ func (repo *GitRepo) GetFileStatuses() ([]FileStatus, []FileStatus, error) {
 
 	return stagedFiles, unstagedFiles, nil
 }
+
+func (repo *GitRepo) FileDiff(filePath string) (string, error) {
+	// First try normal diff for modified files
+	cmd := exec.Command("git", "diff", filePath)
+	cmd.Dir = repo.WorkDir
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+
+	if err == nil && stdout.Len() > 0 {
+		return stdout.String(), nil
+	}
+
+	// If that fails, try diff with HEAD for deleted files
+	cmd = exec.Command("git", "diff", "HEAD", "--", filePath)
+	cmd.Dir = repo.WorkDir
+
+	stdout.Reset()
+	stderr.Reset()
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err = cmd.Run()
+
+	if err == nil && stdout.Len() > 0 {
+		return stdout.String(), nil
+	}
+
+	// If still no diff, try showing the file was deleted
+	cmd = exec.Command("git", "status", "--porcelain", filePath)
+	cmd.Dir = repo.WorkDir
+
+	stdout.Reset()
+	stderr.Reset()
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err = cmd.Run()
+
+	if err == nil {
+		status := strings.TrimSpace(stdout.String())
+		if strings.HasPrefix(status, "D ") {
+			return "File was deleted:\n--- " + filePath + "\n+++ /dev/null\n\n(This file was deleted from the repository)", nil
+		}
+		if strings.HasPrefix(status, "??") {
+			return "New untracked file:\n--- /dev/null\n+++ " + filePath + "\n\n(This is a new file, use 'git add' to track it)", nil
+		}
+	}
+
+	// If all else fails, return a helpful message
+	return "No differences to show for this file.\n\nThis might be because:\n- The file is unmodified\n- The file was renamed\n- The file is not tracked by git", nil
+}

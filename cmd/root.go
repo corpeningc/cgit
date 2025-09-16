@@ -76,7 +76,7 @@ var addCmd = &cobra.Command{
 			return
 		}
 
-		selected, err := ui.SelectUnstagedFilesWithSearch(repoStatus.UnstagedFiles)
+		selected, err := ui.SelectUnstagedFilesWithSearch(repo, repoStatus.UnstagedFiles)
 		handleError("selecting files", err)
 
 		if len(selected) == 0 {
