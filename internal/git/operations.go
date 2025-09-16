@@ -390,3 +390,15 @@ func (repo *GitRepo) GetAllBranches(remote bool) ([]string, error) {
 
 	return branches, nil
 }
+
+func (repo *GitRepo) DeleteBranch(branchName string) error {
+	cmd := exec.Command("git", "branch", "-d", branchName)
+	cmd.Dir = repo.WorkDir
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	return formatCommandError("delete branch", err, stdout, stderr)
+}

@@ -54,6 +54,8 @@ func init() {
 	rootCmd.AddCommand(pullCmd)
 
 	featureCmd.Flags().StringP("origin", "o", "main", "The branch to pull latest changes from before creating the feature branch")
+	featureCmd.Flags().StringP("new", "n", "", "The name of the new feature branch")
+	featureCmd.Flags().StringP("close", "c", "", "The name of the branch to close after creating the new feature branch")
 	rootCmd.AddCommand(featureCmd)
 }
 
@@ -297,19 +299,45 @@ var featureCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
 		origin, err := cmd.Flags().GetString("origin")
+		new := cmd.Flags().Changed("new")
+		close := cmd.Flags().Changed("close")
+
+		if !new && !close {
+			handleError("using feature command", fmt.Errorf("either --new or --close flag must be provided"))
+		}
 
 		handleError("getting origin flag", err)
 		
-		branchName := args[0]
-		err = repo.PullLatestRemote(origin)
-		handleError("pulling latest changes", err)
+		if new {
+			branchName, err := cmd.Flags().GetString("new")
+			handleError("getting close flag", err)
 
-		err = repo.SwitchBranch(origin)
-		handleError("switching to origin branch", err)
+			err = repo.PullLatestRemote(origin)
+			handleError("pulling latest changes", err)
 
-		err = repo.CreateBranch(branchName)
-		handleError("creating feature branch", err)
+			err = repo.SwitchBranch(origin)
+			handleError("switching to origin branch", err)
 
-		fmt.Println("Successfully created and switched to feature branch", branchName)
+			err = repo.CreateBranch(branchName)
+			handleError("creating feature branch", err)
+
+			fmt.Println("Successfully created and switched to feature branch", branchName)
+		} else if close {
+			// Merge the branch to the origin branch and delete it
+			branchName, err := cmd.Flags().GetString("close")
+			handleError("getting close flag", err)
+
+			err = repo.SwitchBranch(origin)
+			handleError("pulling latest changes", err)
+
+			err = repo.PullLatestRemote(origin)
+			handleError("pulling latest changes", err)
+
+			err = repo.MergeLatest(branchName)
+			handleError("closing feature branch", err)
+
+			err = repo.DeleteBranch(branchName)
+			handleError("deleting feature branch", err)
+		}
 	},
 }
