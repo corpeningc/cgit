@@ -303,7 +303,7 @@ var featureCmd = &cobra.Command{
 		close := cmd.Flags().Changed("close")
 
 		if !new && !close {
-			handleError("using feature command", fmt.Errorf("either --new or --close flag must be provided"))
+			handleError("using feature command", fmt.Errorf("either -new or -close flag must be provided"))
 		}
 
 		handleError("getting origin flag", err)
