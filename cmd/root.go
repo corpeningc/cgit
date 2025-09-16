@@ -324,7 +324,7 @@ var featureCmd = &cobra.Command{
 			fmt.Println("Successfully created and switched to feature branch", branchName)
 		} else if close {
 			// Merge the branch to the origin branch and delete it
-			branchName, err := cmd.Flags().GetString("close")
+			branchName, err := repo.GetCurrentBranch()
 			handleError("getting close flag", err)
 
 			err = repo.SwitchBranch(origin)
