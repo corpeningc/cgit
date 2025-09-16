@@ -327,8 +327,11 @@ var featureCmd = &cobra.Command{
 			branchName, err := repo.GetCurrentBranch()
 			handleError("getting close flag", err)
 
+			fmt.Printf("DEBUG: Origin branch is: %s\n", origin)
+			fmt.Printf("DEBUG: Current branch is: %s\n", branchName)
+
 			err = repo.SwitchBranch(origin)
-			handleError("pulling latest changes", err)
+			handleError("switching to origin branch", err)
 
 			err = repo.PullLatestRemote(origin)
 			handleError("pulling latest changes", err)
