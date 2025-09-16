@@ -333,7 +333,7 @@ var featureCmd = &cobra.Command{
 			err = repo.PullLatestRemote(origin)
 			handleError("pulling latest changes", err)
 
-			err = repo.MergeLatest(branchName)
+			err = repo.MergeLocalBranch(branchName)
 			handleError("closing feature branch", err)
 
 			err = repo.DeleteBranch(branchName)

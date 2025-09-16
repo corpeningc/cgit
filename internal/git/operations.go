@@ -152,6 +152,18 @@ func (repo *GitRepo) MergeLatest(branch string) error {
 	return formatCommandError("merge", err, stdout, stderr)
 }
 
+func (repo *GitRepo) MergeLocalBranch(branchName string) error {
+	cmd := exec.Command("git", "merge", branchName)
+	cmd.Dir = repo.WorkDir
+	
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	
+	err := cmd.Run()
+	return formatCommandError("merge local branch", err, stdout, stderr)
+}
+
 func (repo *GitRepo) Commit(message string) error {
 	cmd := exec.Command("git", "commit", "-m", message)
 	os.Environ()
