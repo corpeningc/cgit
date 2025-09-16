@@ -55,7 +55,7 @@ func init() {
 
 	featureCmd.Flags().StringP("origin", "o", "main", "The branch to pull latest changes from before creating the feature branch")
 	featureCmd.Flags().StringP("new", "n", "", "The name of the new feature branch")
-	featureCmd.Flags().StringP("close", "c", "", "The name of the branch to close after creating the new feature branch")
+	featureCmd.Flags().BoolP("close", "c", false, "The name of the branch to close after creating the new feature branch")
 	rootCmd.AddCommand(featureCmd)
 }
 
