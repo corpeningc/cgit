@@ -106,7 +106,7 @@ func (repo *GitRepo) GetFileStatuses() ([]FileStatus, []FileStatus, error) {
 
 func (repo *GitRepo) FileDiff(filePath string) (string, error) {
 	// First try normal diff for modified files
-	cmd := exec.Command("git", "diff", filePath)
+	cmd := exec.Command("git", "diff", "--no-color", filePath)
 	cmd.Dir = repo.WorkDir
 
 	var stdout, stderr bytes.Buffer
@@ -119,7 +119,7 @@ func (repo *GitRepo) FileDiff(filePath string) (string, error) {
 	}
 
 	// If that fails, try diff with HEAD for deleted files
-	cmd = exec.Command("git", "diff", "HEAD", "--", filePath)
+	cmd = exec.Command("git", "diff", "--no-color", "HEAD", "--", filePath)
 	cmd.Dir = repo.WorkDir
 
 	stdout.Reset()
@@ -152,6 +152,5 @@ func (repo *GitRepo) FileDiff(filePath string) (string, error) {
 		}
 	}
 
-	// If all else fails, return a helpful message
-	return "No differences to show for this file.\n\nThis might be because:\n- The file is unmodified\n- The file was renamed\n- The file is not tracked by git", nil
+	return "No differences to show for this file.\n\nThis might be because:\n- The file is unmodified\n- The file was renamed\n- The file is not tracked by git", err 
 }

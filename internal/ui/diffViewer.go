@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -48,13 +49,15 @@ func NewDiffViewerModel(repo *git.GitRepo, filePath string) DiffViewerModel {
 			Bold(true),
 
 		addedStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("46")),
+			Foreground(lipgloss.Color("40")).
+			Background(lipgloss.Color("22")),
 
 		removedStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196")),
+			Foreground(lipgloss.Color("196")).
+			Background(lipgloss.Color("52")),
 
 		contextStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("245")),
+			Foreground(lipgloss.Color("255")),
 
 		headerStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("39")).
@@ -79,26 +82,50 @@ func (m DiffViewerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		headerHeight := 4 // Title + help + borders
+		// Ensure minimum dimensions to prevent rendering issues
+		minWidth := 10
+		minHeight := 5
+
+		viewportWidth := msg.Width - 4  // More padding for borders
+		viewportHeight := msg.Height - headerHeight
+
+		if viewportWidth < minWidth {
+			viewportWidth = minWidth
+		}
+		if viewportHeight < minHeight {
+			viewportHeight = minHeight
+		}
+
 		if !m.ready {
-			m.viewport = viewport.New(msg.Width-2, msg.Height-headerHeight)
+			m.viewport = viewport.New(viewportWidth, viewportHeight)
 			m.viewport.Style = lipgloss.NewStyle().
 				BorderStyle(lipgloss.RoundedBorder()).
 				BorderForeground(lipgloss.Color("62"))
 			m.ready = true
 		} else {
-			m.viewport.Width = msg.Width - 2
-			m.viewport.Height = msg.Height - headerHeight
+			m.viewport.Width = viewportWidth
+			m.viewport.Height = viewportHeight
 		}
 
 		if m.content != "" {
-			m.viewport.SetContent(m.formatDiff(m.content))
+			// TEMPORARY: Test with raw content bypass
+			if strings.Contains(m.filePath, "Cognito") {
+				m.viewport.SetContent("RAW CONTENT TEST:\n\n" + m.content)
+			} else {
+				m.viewport.SetContent(m.formatDiff(m.content))
+			}
 		}
 
 	case diffLoadedMsg:
 		m.content = msg.content
 		m.err = msg.err
 		if m.ready && m.err == nil {
-			m.viewport.SetContent(m.formatDiff(m.content))
+			// TEMPORARY: Test with raw content bypass
+			if strings.Contains(m.filePath, "Cognito") {
+				m.viewport.SetContent("RAW CONTENT TEST:\n\n" + m.content)
+			} else {
+				m.viewport.SetContent(m.formatDiff(m.content))
+			}
 		}
 
 	case tea.KeyMsg:
@@ -172,6 +199,7 @@ func (m DiffViewerModel) View() string {
 func (m DiffViewerModel) loadDiff() tea.Cmd {
 	return func() tea.Msg {
 		content, err := m.repo.FileDiff(m.filePath)
+
 		return diffLoadedMsg{
 			content: content,
 			err:     err,
@@ -184,6 +212,11 @@ func (m DiffViewerModel) formatDiff(content string) string {
 		return m.contextStyle.Render("No differences found for this file.")
 	}
 
+	// Safety check to prevent issues with very long content
+	if len(content) > 500000 { // 500KB limit
+		content = content[:500000] + "\n... (content truncated for display)"
+	}
+
 	lines := strings.Split(content, "\n")
 	var formatted []string
 
@@ -193,25 +226,53 @@ func (m DiffViewerModel) formatDiff(content string) string {
 			continue
 		}
 
+		// Ensure the line is safe to render (no control characters except newlines)
+		safeLine := strings.ReplaceAll(line, "\t", "    ") // Convert tabs to spaces
+
+		var styledLine string
 		switch {
-		case strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---"):
-			formatted = append(formatted, m.headerStyle.Render(line))
-		case strings.HasPrefix(line, "@@"):
-			formatted = append(formatted, m.headerStyle.Render(line))
-		case strings.HasPrefix(line, "+"):
-			formatted = append(formatted, m.addedStyle.Render(line))
-		case strings.HasPrefix(line, "-"):
-			formatted = append(formatted, m.removedStyle.Render(line))
-		case strings.HasPrefix(line, "diff --git"):
-			formatted = append(formatted, m.headerStyle.Render(line))
-		case strings.HasPrefix(line, "index "):
-			formatted = append(formatted, m.headerStyle.Render(line))
+		case strings.HasPrefix(safeLine, "+++") || strings.HasPrefix(safeLine, "---"):
+			styledLine = m.headerStyle.Render(safeLine)
+		case strings.HasPrefix(safeLine, "@@"):
+			styledLine = m.headerStyle.Render(safeLine)
+		case strings.HasPrefix(safeLine, "+"):
+			styledLine = m.addedStyle.Render(safeLine)
+		case strings.HasPrefix(safeLine, "-"):
+			styledLine = m.removedStyle.Render(safeLine)
+		case strings.HasPrefix(safeLine, "diff --git"):
+			styledLine = m.headerStyle.Render(safeLine)
+		case strings.HasPrefix(safeLine, "index "):
+			styledLine = m.headerStyle.Render(safeLine)
 		default:
-			formatted = append(formatted, m.contextStyle.Render(line))
+			styledLine = m.contextStyle.Render(safeLine)
 		}
+
+		// Fallback: if styled line is empty or same as input, use plain text with prefix
+		if styledLine == "" || styledLine == safeLine {
+			switch {
+			case strings.HasPrefix(safeLine, "+"):
+				styledLine = "+ " + safeLine[1:]
+			case strings.HasPrefix(safeLine, "-"):
+				styledLine = "- " + safeLine[1:]
+			case strings.HasPrefix(safeLine, "@@"):
+				styledLine = ">> " + safeLine
+			default:
+				styledLine = "  " + safeLine
+			}
+		}
+
+		formatted = append(formatted, styledLine)
 	}
 
-	return strings.Join(formatted, "\n")
+	result := strings.Join(formatted, "\n")
+
+	// Final safety check - if result is empty, provide fallback
+	if strings.TrimSpace(result) == "" {
+		return m.contextStyle.Render("Diff content could not be formatted properly.\nRaw content length: " +
+			fmt.Sprintf("%d", len(content)) + " characters")
+	}
+
+	return result
 }
 
 func ShowDiff(repo *git.GitRepo, filePath string) error {
