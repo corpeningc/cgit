@@ -385,7 +385,7 @@ func (m FilePickerModel) View() string {
 	if m.mode == SearchMode {
 		help = "j/k: navigate | space: select | enter: go to file | esc: back "
 	} else {
-		help = "j/k: navigate | /: search | space: select | enter: view diff | c: confirm | a: select all | A: deselect all | q: quit"
+		help = "j/k: navigate | /: search | space: select | enter: view diff | c: stage | r: remove | a: select all | A: deselect all | q: quit"
 	}
 	sections = append(sections, "")
 	sections = append(sections, m.helpStyle.Render(help))
