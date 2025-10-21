@@ -156,12 +156,12 @@ func (repo *GitRepo) FileDiff(filePath string) (string, error) {
 	return "No differences to show for this file.\n\nThis might be because:\n- The file is unmodified\n- The file was renamed\n- The file is not tracked by git", nil
 }
 
-func (r *GitRepo) RemoveFile(files []string) error {
+func (r *GitRepo) RemoveFiles(files []string) error {
 	if len(files) == 0 {
 		return nil
 	}
 
-	args := append([]string{"remove"}, files...)
+	args := append([]string{"restore"}, files...)
 	cmd := exec.Command("git", args...)
 
 	var stdout, stderr bytes.Buffer
@@ -169,5 +169,5 @@ func (r *GitRepo) RemoveFile(files []string) error {
 	cmd.Stderr = &stderr
 
 	err := cmd.Run()
-	return formatCommandError("remove files", err, stdout, stderr)
+	return formatCommandError("restore files", err, stdout, stderr)
 }

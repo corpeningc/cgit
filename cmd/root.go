@@ -84,7 +84,7 @@ var addCmd = &cobra.Command{
 		}
 
 		if removing {
-			err = repo.RemoveFile(selected)
+			err = repo.RemoveFiles(selected)
 			handleError("removing files", err)
 			fmt.Printf("Removed %d files .\n", len(selected))
 			for _, file := range selected {

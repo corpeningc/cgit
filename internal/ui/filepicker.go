@@ -193,6 +193,7 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.confirmed = true
 			m.quitting = true
 			m.removing = true
+			return m, tea.Quit
 		case "/":
 			if m.mode == NormalMode {
 				m.mode = SearchMode
