@@ -170,9 +170,10 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.String() {
 		case "q", "ctrl+c":
-			m.quitting = true
-			return m, tea.Quit
-
+			if m.mode != SearchMode {
+				m.quitting = true
+				return m, tea.Quit
+			}
 		case "esc":
 			if m.mode == SearchMode {
 				m.mode = NormalMode
@@ -233,13 +234,7 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "j", "down":
-			if m.mode == SearchMode {
-				// Navigate down in search results
-				if len(m.filteredIndices) > 0 {
-					m.searchSelected = (m.searchSelected + 1) % len(m.filteredIndices)
-				}
-			} else {
-				// Navigate down in file list with scrolling
+			if m.mode != SearchMode {
 				if len(m.files) > 0 {
 					m.currentIndex = (m.currentIndex + 1) % len(m.files)
 					m.adjustScrolling()
@@ -247,12 +242,7 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "k", "up":
-			if m.mode == SearchMode {
-				// Navigate up in search results
-				if len(m.filteredIndices) > 0 {
-					m.searchSelected = (m.searchSelected - 1 + len(m.filteredIndices)) % len(m.filteredIndices)
-				}
-			} else {
+			if m.mode != SearchMode {
 				// Navigate up in file list with scrolling
 				if len(m.files) > 0 {
 					m.currentIndex = (m.currentIndex - 1 + len(m.files)) % len(m.files)
@@ -424,7 +414,7 @@ func (m FilePickerModel) View() string {
 	// Help
 	help := ""
 	if m.mode == SearchMode {
-		help = "j/k: navigate | space: select | enter: go to file | esc: back | q: quit"
+		help = "j/k: navigate | space: select | enter: go to file | esc: back "
 	} else {
 		help = "j/k: navigate | /: search | space: select | enter: view diff | c: confirm | a: select all | A: deselect all | q: quit"
 	}
