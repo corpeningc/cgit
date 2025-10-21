@@ -20,19 +20,18 @@ func handleError(operation string, err error) {
 }
 
 var rootCmd = &cobra.Command{
-	Use: "cgit",
+	Use:   "cgit",
 	Short: "A simplified git workflow tool",
-	Long: "Simplifies common git operations with interactive interfaces",
-	PersistentPreRun: func (cmd *cobra.Command, args []string) {
+	Long:  "Simplifies common git operations with interactive interfaces",
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		_, err := exec.LookPath("git")
 		handleError("checking for git installation", err)
 
 		repo := git.New(".")
 		_, err = repo.GetCurrentBranch()
-		handleError("checking for git repository", err)	
+		handleError("checking for git repository", err)
 	},
 }
-
 
 func Execute() error {
 	return rootCmd.Execute()
@@ -45,7 +44,7 @@ func init() {
 	rootCmd.AddCommand(commitCmd)
 	rootCmd.AddCommand(pushCmd)
 	rootCmd.AddCommand(newBranchCmd)
-	
+
 	switchBranchCmd.Flags().BoolP("remote", "r", false, "Include remote branches in the branch list")
 	rootCmd.AddCommand(switchBranchCmd)
 
@@ -60,7 +59,7 @@ func init() {
 }
 
 var addCmd = &cobra.Command{
-	Use: "add",
+	Use:   "add",
 	Short: "Interactively add files to staging with search support",
 	Long: "Launch an interactive file picker for selecting and staging files with fuzzy search capabilities. " +
 		"Use /: to search, space: to select files, enter: to stage selected files.",
@@ -95,7 +94,7 @@ var addCmd = &cobra.Command{
 }
 
 var mergeCommand = &cobra.Command{
-	Use: "merge",
+	Use:   "merge",
 	Short: "Fetch latest remote changes and merge",
 	Run: func(cmd *cobra.Command, args []string) {
 		branch := args[0]
@@ -109,18 +108,17 @@ var mergeCommand = &cobra.Command{
 }
 
 var commitAndPushCmd = &cobra.Command{
-	Use: "commit-and-push",
+	Use:     "commit-and-push",
 	Aliases: []string{"cap"},
-	Short: "Commit and push changes",
+	Short:   "Commit and push changes",
 
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
 
-
 		commitMsg := args[0]
 		err := repo.Commit(commitMsg)
 		handleError("committing changes", err)
-		
+
 		err = repo.Push()
 		handleError("pushing changes", err)
 
@@ -129,7 +127,7 @@ var commitAndPushCmd = &cobra.Command{
 }
 
 var commitCmd = &cobra.Command{
-	Use: "commit",
+	Use:   "commit",
 	Short: "Commit staged changes with a message",
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
@@ -143,7 +141,7 @@ var commitCmd = &cobra.Command{
 }
 
 var pushCmd = &cobra.Command{
-	Use: "push",
+	Use:   "push",
 	Short: "Push committed changes to remote",
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
@@ -155,11 +153,11 @@ var pushCmd = &cobra.Command{
 	},
 }
 
-var newBranchCmd = &cobra.Command {
-	Use: "new-branch",
+var newBranchCmd = &cobra.Command{
+	Use:     "new-branch",
 	Aliases: []string{"nb"},
-	Short: "Create and switch to a new branch",
-	Run: func (cmd *cobra.Command, args []string) {
+	Short:   "Create and switch to a new branch",
+	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
 
 		branchName := args[0]
@@ -173,15 +171,14 @@ var newBranchCmd = &cobra.Command {
 	},
 }
 
-
 var switchBranchCmd = &cobra.Command{
-	Use: "switch",
+	Use:     "switch",
 	Aliases: []string{"sw"},
-	Short: "Switch to an existing branch",
-	ValidArgsFunction: func (cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	Short:   "Switch to an existing branch",
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		repo := git.New(".")
 		remote, err := cmd.Flags().GetBool("remote")
-		
+
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveError
 		}
@@ -213,28 +210,28 @@ var switchBranchCmd = &cobra.Command{
 			var stashName string
 
 			switch input {
-				case "d":
-					err = repo.FullClean()
-					handleError("deleting changes", err)
-					fmt.Println("Changes deleted.")
-					// Proceed to switch branches
-				case "s":
-					_, err = reader.Discard(0)
+			case "d":
+				err = repo.FullClean()
+				handleError("deleting changes", err)
+				fmt.Println("Changes deleted.")
+				// Proceed to switch branches
+			case "s":
+				_, err = reader.Discard(0)
 
-					handleError("discarding input", err)
-					// Read stash name
-					fmt.Print("Enter stash name: ")
-					handleError("reading stash name", err)
-					stashName, err = reader.ReadString('\n')
-					stashName = strings.TrimSpace(stashName)
-					if stashName == "" {
-						fmt.Println("No stash name provided. Aborting switch.")
-						return
-					}
-					err = repo.Stash(stashName)
-					handleError("stashing changes", err)
-					fmt.Printf("Changes stashed as '%s'.\n", stashName)
+				handleError("discarding input", err)
+				// Read stash name
+				fmt.Print("Enter stash name: ")
+				handleError("reading stash name", err)
+				stashName, err = reader.ReadString('\n')
+				stashName = strings.TrimSpace(stashName)
+				if stashName == "" {
+					fmt.Println("No stash name provided. Aborting switch.")
+					return
 				}
+				err = repo.Stash(stashName)
+				handleError("stashing changes", err)
+				fmt.Printf("Changes stashed as '%s'.\n", stashName)
+			}
 		}
 
 		err = repo.SwitchBranch(branchName)
@@ -245,9 +242,9 @@ var switchBranchCmd = &cobra.Command{
 }
 
 var stashPopCmd = &cobra.Command{
-	Use: "stash-pop",
+	Use:     "stash-pop",
 	Aliases: []string{"sp"},
-	Short: "Pop the most recent stash",
+	Short:   "Pop the most recent stash",
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
 
@@ -259,9 +256,9 @@ var stashPopCmd = &cobra.Command{
 }
 
 var fullCleanCmd = &cobra.Command{
-	Use: "full-clean",
+	Use:     "full-clean",
 	Aliases: []string{"fc"},
-	Short: "Hard reset branch; Clean files and directories",
+	Short:   "Hard reset branch; Clean files and directories",
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
 
@@ -273,9 +270,9 @@ var fullCleanCmd = &cobra.Command{
 }
 
 var pullCmd = &cobra.Command{
-	Use: "pull",
+	Use:   "pull",
 	Short: "Pull latest changes from remote",
-	Run: func(cmd *cobra.Command, args [] string) {
+	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
 		// If no branch provided, use current branch
 		branchName, err := repo.GetCurrentBranch()
@@ -293,9 +290,9 @@ var pullCmd = &cobra.Command{
 }
 
 var featureCmd = &cobra.Command{
-	Use: "feature",
+	Use:     "feature",
 	Aliases: []string{"f"},
-	Short: "Pull latest from main, create and switch to a new feature branch",
+	Short:   "Pull latest from main, create and switch to a new feature branch",
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
 		origin, err := cmd.Flags().GetString("origin")
@@ -307,7 +304,7 @@ var featureCmd = &cobra.Command{
 		}
 
 		handleError("getting origin flag", err)
-		
+
 		if new {
 			branchName, err := cmd.Flags().GetString("new")
 			handleError("getting close flag", err)
@@ -347,3 +344,4 @@ var featureCmd = &cobra.Command{
 		}
 	},
 }
+

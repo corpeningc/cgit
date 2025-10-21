@@ -68,7 +68,7 @@ func (repo *GitRepo) Commit(message string) error {
 func (repo *GitRepo) Push() error {
 	currentBranch, err := repo.GetCurrentBranch()
 	if err != nil {
-			return err
+		return err
 	}
 
 	statusCmd := exec.Command("git", "status")
@@ -168,3 +168,4 @@ func (repo *GitRepo) FullClean() error {
 	err = cleanCmd.Run()
 	return formatCommandError("clean -fd", err, cleanStdout, cleanStderr)
 }
+

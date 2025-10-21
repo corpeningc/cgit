@@ -8,10 +8,10 @@ import (
 )
 
 type FileStatus struct {
-	Path      string
-	Status    string // M(odified), A(dded), D(eleted), R(enamed), ?(untracked)
-	Staged    bool
-	WorkTree  bool
+	Path     string
+	Status   string // M(odified), A(dded), D(eleted), R(enamed), ?(untracked)
+	Staged   bool
+	WorkTree bool
 }
 
 func (repo *GitRepo) GetModifiedFiles() ([]string, error) {
@@ -155,3 +155,4 @@ func (repo *GitRepo) FileDiff(filePath string) (string, error) {
 	// If all else fails, return a helpful message
 	return "No differences to show for this file.\n\nThis might be because:\n- The file is unmodified\n- The file was renamed\n- The file is not tracked by git", nil
 }
+

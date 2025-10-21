@@ -16,7 +16,7 @@ func (repo *GitRepo) GetCurrentBranch() (string, error) {
 
 	output, err := cmd.Output()
 	if err != nil {
-			return "", fmt.Errorf("failed to get current branch: %v", err)
+		return "", fmt.Errorf("failed to get current branch: %v", err)
 	}
 
 	return strings.TrimSpace(string(output)), nil
@@ -149,3 +149,4 @@ func (repo *GitRepo) DeleteBranch(branchName string) error {
 	err := cmd.Run()
 	return formatCommandError("delete branch", err, stdout, stderr)
 }
+

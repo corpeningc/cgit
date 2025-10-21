@@ -10,21 +10,21 @@ import (
 )
 
 type DiffViewerModel struct {
-	repo       *git.GitRepo
-	filePath   string
-	content    string
-	viewport   viewport.Model
-	ready      bool
-	err        error
+	repo     *git.GitRepo
+	filePath string
+	content  string
+	viewport viewport.Model
+	ready    bool
+	err      error
 
 	// Styles
-	titleStyle    lipgloss.Style
-	addedStyle    lipgloss.Style
-	removedStyle  lipgloss.Style
-	contextStyle  lipgloss.Style
-	headerStyle   lipgloss.Style
-	errorStyle    lipgloss.Style
-	helpStyle     lipgloss.Style
+	titleStyle   lipgloss.Style
+	addedStyle   lipgloss.Style
+	removedStyle lipgloss.Style
+	contextStyle lipgloss.Style
+	headerStyle  lipgloss.Style
+	errorStyle   lipgloss.Style
+	helpStyle    lipgloss.Style
 }
 
 type diffLoadedMsg struct {
@@ -220,3 +220,4 @@ func ShowDiff(repo *git.GitRepo, filePath string) error {
 	_, err := p.Run()
 	return err
 }
+

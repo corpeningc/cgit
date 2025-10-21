@@ -24,23 +24,23 @@ type FilePickerModel struct {
 	fileStatuses    []git.FileStatus
 	selectedFiles   map[string]bool
 	currentIndex    int
-	mode           FilePickerMode
-	searchInput    textinput.Model
-	searchQuery    string
+	mode            FilePickerMode
+	searchInput     textinput.Model
+	searchQuery     string
 	filteredIndices []int
 	searchSelected  int
-	quitting       bool
-	confirmed      bool
-	width          int
-	height         int
+	quitting        bool
+	confirmed       bool
+	width           int
+	height          int
 	showStatusChars bool
 
 	// Scrolling support
-	scrollOffset    int
-	visibleLines    int
+	scrollOffset int
+	visibleLines int
 
 	// Diff viewer
-	diffViewer     DiffViewerModel
+	diffViewer DiffViewerModel
 
 	// Styles
 	titleStyle      lipgloss.Style
@@ -223,7 +223,7 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.confirmed = true
 			m.quitting = true
 			return m, tea.Quit
-			
+
 		case "/":
 			if m.mode == NormalMode {
 				m.mode = SearchMode
@@ -231,7 +231,7 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.searchInput.SetValue("")
 				return m, nil
 			}
-			
+
 		case "j", "down":
 			if m.mode == SearchMode {
 				// Navigate down in search results
@@ -271,14 +271,14 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.currentIndex = len(m.files) - 1
 				m.adjustScrolling()
 			}
-			
+
 		case " ", "s":
 			if m.mode == NormalMode && len(m.files) > 0 {
 				// Toggle selection
 				file := m.files[m.currentIndex]
 				m.selectedFiles[file] = !m.selectedFiles[file]
 			}
-			
+
 		case "a":
 			if m.mode == NormalMode {
 				// Select all files
@@ -286,7 +286,7 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.selectedFiles[file] = true
 				}
 			}
-			
+
 		case "A":
 			if m.mode == NormalMode {
 				// Deselect all files
@@ -294,7 +294,7 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	}
-	
+
 	// Update search input if in search mode
 	if m.mode == SearchMode {
 		oldValue := m.searchInput.Value()
@@ -306,7 +306,7 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, cmd
 	}
-	
+
 	return m, cmd
 }
 
@@ -331,7 +331,7 @@ func (m FilePickerModel) View() string {
 		searchTitle := m.searchStyle.Render("Search files:")
 		sections = append(sections, searchTitle)
 		sections = append(sections, m.searchInput.View())
-		
+
 		// Show search results
 		if m.searchQuery != "" {
 			if len(m.filteredIndices) == 0 {
@@ -339,33 +339,33 @@ func (m FilePickerModel) View() string {
 			} else {
 				resultsTitle := m.searchStyle.Render(fmt.Sprintf("Results (%d matches):", len(m.filteredIndices)))
 				sections = append(sections, resultsTitle)
-				
+
 				// Show filtered files with navigation
 				for i, idx := range m.filteredIndices {
 					if idx >= len(m.files) {
 						continue
 					}
-					
+
 					file := m.files[idx]
 					prefix := "  "
 					style := m.unselectedStyle
-					
+
 					if i == m.searchSelected {
 						prefix = "> "
 						style = m.selectedStyle
 					}
-					
+
 					checkbox := "[ ]"
 					if m.selectedFiles[file] {
 						checkbox = m.checkedStyle.Render("[x]")
 					}
-					
+
 					// Add status character if available
 					statusChar := ""
 					if m.showStatusChars && idx < len(m.fileStatuses) {
 						statusChar = fmt.Sprintf("[%s] ", m.fileStatuses[idx].Status)
 					}
-					
+
 					line := fmt.Sprintf("%s%s %s%s", prefix, checkbox, statusChar, file)
 					sections = append(sections, style.Render(line))
 				}
@@ -420,7 +420,7 @@ func (m FilePickerModel) View() string {
 			sections = append(sections, m.helpStyle.Render(scrollInfo))
 		}
 	}
-	
+
 	// Help
 	help := ""
 	if m.mode == SearchMode {
@@ -430,7 +430,7 @@ func (m FilePickerModel) View() string {
 	}
 	sections = append(sections, "")
 	sections = append(sections, m.helpStyle.Render(help))
-	
+
 	return strings.Join(sections, "\n")
 }
 
@@ -470,16 +470,16 @@ func (m *FilePickerModel) performSearch() {
 		m.searchSelected = 0
 		return
 	}
-	
+
 	query := strings.ToLower(m.searchQuery)
 	m.filteredIndices = []int{}
-	
+
 	for i, file := range m.files {
 		if m.fuzzyMatch(strings.ToLower(file), query) {
 			m.filteredIndices = append(m.filteredIndices, i)
 		}
 	}
-	
+
 	// Reset search selection to first result
 	m.searchSelected = 0
 }
@@ -488,7 +488,7 @@ func (m FilePickerModel) fuzzyMatch(text, query string) bool {
 	if query == "" {
 		return true
 	}
-	
+
 	// Simple fuzzy matching - check if all characters in query appear in order
 	textIdx := 0
 	for _, queryChar := range query {
