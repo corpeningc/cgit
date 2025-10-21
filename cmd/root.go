@@ -75,7 +75,7 @@ var addCmd = &cobra.Command{
 			return
 		}
 
-		selected, err := ui.SelectUnstagedFilesWithSearch(repo, repoStatus.UnstagedFiles)
+		selected, removing, err := ui.SelectFiles(repo, repoStatus.UnstagedFiles)
 		handleError("selecting files", err)
 
 		if len(selected) == 0 {
@@ -83,13 +83,22 @@ var addCmd = &cobra.Command{
 			return
 		}
 
-		err = repo.AddFiles(selected)
-		handleError("adding files", err)
-
-		fmt.Printf("Added %d files to staging.\n", len(selected))
-		for _, file := range selected {
-			fmt.Printf(" - %s\n", file)
+		if removing {
+			err = repo.RemoveFile(selected)
+			handleError("removing files", err)
+			fmt.Printf("Removed %d files .\n", len(selected))
+			for _, file := range selected {
+				fmt.Printf(" - %s\n", file)
+			}
+		} else {
+			err = repo.AddFiles(selected)
+			handleError("adding files", err)
+			fmt.Printf("Added %d files to staging.\n", len(selected))
+			for _, file := range selected {
+				fmt.Printf(" - %s\n", file)
+			}
 		}
+
 	},
 }
 
@@ -344,4 +353,3 @@ var featureCmd = &cobra.Command{
 		}
 	},
 }
-

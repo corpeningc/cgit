@@ -34,6 +34,7 @@ type FilePickerModel struct {
 	width           int
 	height          int
 	showStatusChars bool
+	removing        bool
 
 	// Scrolling support
 	scrollOffset int
@@ -51,44 +52,7 @@ type FilePickerModel struct {
 	searchStyle     lipgloss.Style
 }
 
-func NewFilePickerModel(repo *git.GitRepo, files []string) FilePickerModel {
-	si := textinput.New()
-	si.Placeholder = "Search files..."
-	si.CharLimit = 100
-	si.Width = 50
-
-	return FilePickerModel{
-		repo:          repo,
-		files:         files,
-		selectedFiles: make(map[string]bool),
-		searchInput:   si,
-
-		// Initialize styles
-		titleStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("205")).
-			Bold(true),
-
-		selectedStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("205")).
-			Bold(true),
-
-		unselectedStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("245")),
-
-		checkedStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("46")).
-			Bold(true),
-
-		helpStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("245")),
-
-		searchStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("39")).
-			Bold(true),
-	}
-}
-
-func NewFilePickerModelWithStatus(repo *git.GitRepo, fileStatuses []git.FileStatus) FilePickerModel {
+func NewFilePicker(repo *git.GitRepo, fileStatuses []git.FileStatus) FilePickerModel {
 	si := textinput.New()
 	si.Placeholder = "Search files..."
 	si.CharLimit = 100
@@ -225,6 +189,10 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 
+		case "r":
+			m.confirmed = true
+			m.quitting = true
+			m.removing = true
 		case "/":
 			if m.mode == NormalMode {
 				m.mode = SearchMode
@@ -508,76 +476,26 @@ func (m FilePickerModel) getSelectedFiles() []string {
 	return selected
 }
 
-func SelectFiles(repo *git.GitRepo, files []string) ([]string, error) {
-	if len(files) == 0 {
-		return []string{}, nil
-	}
-
-	m := NewFilePickerModel(repo, files)
-	p := tea.NewProgram(m)
-
-	finalModel, err := p.Run()
-	if err != nil {
-		return nil, err
-	}
-
-	// Type assert to get our model back
-	if model, ok := finalModel.(FilePickerModel); ok {
-		if model.confirmed {
-			return model.getSelectedFiles(), nil
-		}
-	}
-
-	// User quit without confirming
-	return []string{}, nil
-}
-
-// SelectFilesWithSearch provides an enhanced file picker with fuzzy search capabilities
-func SelectFilesWithSearch(repo *git.GitRepo, files []string) ([]string, error) {
-	if len(files) == 0 {
-		return []string{}, nil
-	}
-
-	m := NewFilePickerModel(repo, files)
-	p := tea.NewProgram(m, tea.WithAltScreen())
-
-	finalModel, err := p.Run()
-	if err != nil {
-		return nil, err
-	}
-
-	// Type assert to get our model back
-	if model, ok := finalModel.(FilePickerModel); ok {
-		if model.confirmed {
-			return model.getSelectedFiles(), nil
-		}
-	}
-
-	// User quit without confirming
-	return []string{}, nil
-}
-
-// SelectUnstagedFilesWithSearch provides an enhanced file picker specifically for unstaged files with status display
-func SelectUnstagedFilesWithSearch(repo *git.GitRepo, fileStatuses []git.FileStatus) ([]string, error) {
+// SelectFiles provides an enhanced file picker specifically for unstaged files with status display
+func SelectFiles(repo *git.GitRepo, fileStatuses []git.FileStatus) ([]string, bool, error) {
 	if len(fileStatuses) == 0 {
-		return []string{}, nil
+		return []string{}, false, nil
 	}
 
-	m := NewFilePickerModelWithStatus(repo, fileStatuses)
+	m := NewFilePicker(repo, fileStatuses)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	finalModel, err := p.Run()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	// Type assert to get our model back
 	if model, ok := finalModel.(FilePickerModel); ok {
 		if model.confirmed {
-			return model.getSelectedFiles(), nil
+			return model.getSelectedFiles(), model.removing, nil
 		}
 	}
 
-	// User quit without confirming
-	return []string{}, nil
+	return []string{}, false, nil
 }
