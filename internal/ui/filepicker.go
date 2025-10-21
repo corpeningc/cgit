@@ -151,36 +151,10 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "enter":
-			if m.mode == SearchMode {
-				// Select search result and exit search
-				if len(m.filteredIndices) > 0 && m.searchSelected < len(m.filteredIndices) {
-					m.currentIndex = m.filteredIndices[m.searchSelected]
-				}
-				m.mode = NormalMode
-				m.searchInput.SetValue("")
-				return m, nil
-			} else {
-				// Show diff for current file
-				if len(m.files) > 0 {
-					filePath := m.files[m.currentIndex]
-					m.diffViewer = NewDiffViewerModel(m.repo, filePath)
-					m.mode = DiffMode
-
-					// Send window size to diff viewer if we have it
-					var cmds []tea.Cmd
-					cmds = append(cmds, m.diffViewer.Init())
-					if m.width > 0 && m.height > 0 {
-						sizeMsg := tea.WindowSizeMsg{Width: m.width, Height: m.height}
-						updatedModel, sizeCmd := m.diffViewer.Update(sizeMsg)
-						if diffModel, ok := updatedModel.(DiffViewerModel); ok {
-							m.diffViewer = diffModel
-						}
-						if sizeCmd != nil {
-							cmds = append(cmds, sizeCmd)
-						}
-					}
-					return m, tea.Batch(cmds...)
-				}
+			if m.mode == NormalMode && len(m.files) > 0 {
+				// Toggle selection
+				file := m.files[m.currentIndex]
+				m.selectedFiles[file] = !m.selectedFiles[file]
 			}
 
 		case "c", "ctrl+enter":
@@ -232,10 +206,32 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case " ", "s":
-			if m.mode == NormalMode && len(m.files) > 0 {
-				// Toggle selection
-				file := m.files[m.currentIndex]
-				m.selectedFiles[file] = !m.selectedFiles[file]
+			if m.mode == SearchMode {
+				if len(m.filteredIndices) > 0 && m.searchSelected < len(m.filteredIndices) {
+					m.currentIndex = m.filteredIndices[m.searchSelected]
+				}
+				m.mode = NormalMode
+				m.searchInput.SetValue("")
+				return m, nil
+			} else {
+				if len(m.files) > 0 {
+					filePath := m.files[m.currentIndex]
+					m.diffViewer = NewDiffViewerModel(m.repo, filePath)
+					m.mode = DiffMode
+					var cmds []tea.Cmd
+					cmds = append(cmds, m.diffViewer.Init())
+					if m.width > 0 && m.height > 0 {
+						sizeMsg := tea.WindowSizeMsg{Width: m.width, Height: m.height}
+						updatedModel, sizeCmd := m.diffViewer.Update(sizeMsg)
+						if diffModel, ok := updatedModel.(DiffViewerModel); ok {
+							m.diffViewer = diffModel
+						}
+						if sizeCmd != nil {
+							cmds = append(cmds, sizeCmd)
+						}
+					}
+					return m, tea.Batch(cmds...)
+				}
 			}
 
 		case "a":
@@ -282,7 +278,7 @@ func (m FilePickerModel) View() string {
 	var sections []string
 
 	// Title
-	title := m.titleStyle.Render("Select files to add")
+	title := m.titleStyle.Render("Select files to manage")
 	sections = append(sections, title)
 
 	if m.mode == SearchMode {
@@ -383,9 +379,9 @@ func (m FilePickerModel) View() string {
 	// Help
 	help := ""
 	if m.mode == SearchMode {
-		help = "j/k: navigate | space: select | enter: go to file | esc: back "
+		help = "j/k: navigate | space: diff | enter: select | esc: back "
 	} else {
-		help = "j/k: navigate | /: search | space: select | enter: view diff | c: stage | r: remove | a: select all | A: deselect all | q: quit"
+		help = "j/k: navigate | /: search | space: diff | enter: select | c: stage | r: remove | a: select all | A: deselect all | q: quit"
 	}
 	sections = append(sections, "")
 	sections = append(sections, m.helpStyle.Render(help))

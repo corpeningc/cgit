@@ -38,7 +38,7 @@ func Execute() error {
 }
 
 func init() {
-	rootCmd.AddCommand(addCmd)
+	rootCmd.AddCommand(manageCmd)
 	rootCmd.AddCommand(mergeCommand)
 	rootCmd.AddCommand(commitAndPushCmd)
 	rootCmd.AddCommand(commitCmd)
@@ -58,11 +58,12 @@ func init() {
 	rootCmd.AddCommand(featureCmd)
 }
 
-var addCmd = &cobra.Command{
-	Use:   "add",
-	Short: "Interactively add files to staging with search support",
-	Long: "Launch an interactive file picker for selecting and staging files with fuzzy search capabilities. " +
-		"Use /: to search, space: to select files, enter: to stage selected files.",
+var manageCmd = &cobra.Command{
+	Use:     "manage",
+	Aliases: []string{"m"},
+	Short:   "Interactively manage files with search support",
+	Long: "Launch an interactive file picker for selecting and staging/restoring files with fuzzy search capabilities. " +
+		"Use /: to search, space: to select files, c: to stage selected files, and r to restore selected files.",
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
 
