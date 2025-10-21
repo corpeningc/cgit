@@ -132,7 +132,6 @@ func (repo *GitRepo) FileDiff(filePath string) (string, error) {
 		return stdout.String(), nil
 	}
 
-	// If still no diff, try showing the file was deleted
 	cmd = exec.Command("git", "status", "--porcelain", filePath)
 	cmd.Dir = repo.WorkDir
 
@@ -152,7 +151,6 @@ func (repo *GitRepo) FileDiff(filePath string) (string, error) {
 		}
 	}
 
-	// If all else fails, return a helpful message
 	return "No differences to show for this file.\n\nThis might be because:\n- The file is unmodified\n- The file was renamed\n- The file is not tracked by git", nil
 }
 
@@ -163,7 +161,6 @@ func (r *GitRepo) RemoveFiles(files []string) error {
 
 	args := append([]string{"restore"}, files...)
 	cmd := exec.Command("git", args...)
-
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
