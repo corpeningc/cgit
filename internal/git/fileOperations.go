@@ -106,7 +106,7 @@ func (repo *GitRepo) GetFileStatuses() ([]FileStatus, []FileStatus, error) {
 
 func (repo *GitRepo) FileDiff(filePath string) (string, error) {
 	// First try normal diff for modified files
-	cmd := exec.Command("git", "diff", filePath)
+	cmd := exec.Command("git", "diff", "--color=always", filePath)
 	cmd.Dir = repo.WorkDir
 
 	var stdout, stderr bytes.Buffer

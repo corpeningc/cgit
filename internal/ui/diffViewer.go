@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"strings"
-
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -34,9 +32,7 @@ type diffLoadedMsg struct {
 
 func NewDiffViewerModel(repo *git.GitRepo, filePath string) DiffViewerModel {
 	vp := viewport.New(0, 0)
-	vp.Style = lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62"))
+	vp.Style = lipgloss.NewStyle()
 
 	return DiffViewerModel{
 		repo:     repo,
@@ -44,8 +40,7 @@ func NewDiffViewerModel(repo *git.GitRepo, filePath string) DiffViewerModel {
 		viewport: vp,
 
 		titleStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("205")).
-			Bold(true),
+			Foreground(lipgloss.Color("205")),
 
 		addedStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("46")),
@@ -57,12 +52,10 @@ func NewDiffViewerModel(repo *git.GitRepo, filePath string) DiffViewerModel {
 			Foreground(lipgloss.Color("245")),
 
 		headerStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("39")).
-			Bold(true),
+			Foreground(lipgloss.Color("39")),
 
 		errorStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196")).
-			Bold(true),
+			Foreground(lipgloss.Color("196")),
 
 		helpStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("245")),
@@ -81,9 +74,7 @@ func (m DiffViewerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		headerHeight := 4 // Title + help + borders
 		if !m.ready {
 			m.viewport = viewport.New(msg.Width-2, msg.Height-headerHeight)
-			m.viewport.Style = lipgloss.NewStyle().
-				BorderStyle(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("62"))
+			m.viewport.Style = lipgloss.NewStyle()
 			m.ready = true
 		} else {
 			m.viewport.Width = msg.Width - 2
@@ -98,7 +89,8 @@ func (m DiffViewerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.content = msg.content
 		m.err = msg.err
 		if m.ready && m.err == nil {
-			m.viewport.SetContent(m.formatDiff(m.content))
+			formatted := m.formatDiff(m.content)
+			m.viewport.SetContent(formatted)
 		}
 
 	case tea.KeyMsg:
@@ -155,14 +147,11 @@ func (m DiffViewerModel) View() string {
 
 	var sections []string
 
-	// Title
 	title := m.titleStyle.Render("Diff Viewer - " + m.filePath)
 	sections = append(sections, title)
 
-	// Viewport with diff content
 	sections = append(sections, m.viewport.View())
 
-	// Help
 	help := m.helpStyle.Render("j/k: line by line | d/u: half page | f/b: full page | g/G: top/bottom | esc: back")
 	sections = append(sections, help)
 
@@ -184,34 +173,8 @@ func (m DiffViewerModel) formatDiff(content string) string {
 		return m.contextStyle.Render("No differences found for this file.")
 	}
 
-	lines := strings.Split(content, "\n")
-	var formatted []string
-
-	for _, line := range lines {
-		if line == "" {
-			formatted = append(formatted, "")
-			continue
-		}
-
-		switch {
-		case strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---"):
-			formatted = append(formatted, m.headerStyle.Render(line))
-		case strings.HasPrefix(line, "@@"):
-			formatted = append(formatted, m.headerStyle.Render(line))
-		case strings.HasPrefix(line, "+"):
-			formatted = append(formatted, m.addedStyle.Render(line))
-		case strings.HasPrefix(line, "-"):
-			formatted = append(formatted, m.removedStyle.Render(line))
-		case strings.HasPrefix(line, "diff --git"):
-			formatted = append(formatted, m.headerStyle.Render(line))
-		case strings.HasPrefix(line, "index "):
-			formatted = append(formatted, m.headerStyle.Render(line))
-		default:
-			formatted = append(formatted, m.contextStyle.Render(line))
-		}
-	}
-
-	return strings.Join(formatted, "\n")
+	// Return raw content - git diff already has ANSI colors
+	return content
 }
 
 func ShowDiff(repo *git.GitRepo, filePath string) error {
@@ -220,4 +183,3 @@ func ShowDiff(repo *git.GitRepo, filePath string) error {
 	_, err := p.Run()
 	return err
 }
-
