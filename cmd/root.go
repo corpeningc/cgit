@@ -227,19 +227,24 @@ var switchBranchCmd = &cobra.Command{
 				// Proceed to switch branches
 			case "s":
 				_, err = reader.Discard(0)
-
 				handleError("discarding input", err)
-				// Read stash name
+
 				fmt.Print("Enter stash name: ")
 				handleError("reading stash name", err)
+
 				stashName, err = reader.ReadString('\n')
+				handleError("stashing changes", err)
+
 				stashName = strings.TrimSpace(stashName)
+
 				if stashName == "" {
 					fmt.Println("No stash name provided. Aborting switch.")
 					return
 				}
+
 				err = repo.Stash(stashName)
 				handleError("stashing changes", err)
+
 				fmt.Printf("Changes stashed as '%s'.\n", stashName)
 			}
 		}
@@ -321,12 +326,15 @@ var featureCmd = &cobra.Command{
 
 			err = repo.PullLatestRemote(origin)
 			handleError("pulling latest changes", err)
+			fmt.Println("Pulling latest changes from origin")
 
 			err = repo.SwitchBranch(origin)
 			handleError("switching to origin branch", err)
+			fmt.Printf("Switching branches to %s\n", origin)
 
 			err = repo.CreateBranch(branchName)
 			handleError("creating feature branch", err)
+			fmt.Printf("Creating branch: %s\n", branchName)
 
 			fmt.Println("Successfully created and switched to feature branch", branchName)
 		} else if close {
@@ -340,6 +348,7 @@ var featureCmd = &cobra.Command{
 
 			err = repo.PullLatestRemote(origin)
 			handleError("pulling latest changes", err)
+			fmt.Println("Pulling latest changes", origin)
 
 			err = repo.MergeLocalBranch(branchName)
 			handleError("closing feature branch", err)
@@ -347,10 +356,11 @@ var featureCmd = &cobra.Command{
 
 			err = repo.DeleteBranch(branchName)
 			handleError("deleting feature branch", err)
+			fmt.Printf("Deleting branch %s", origin)
 
 			err = repo.Push()
 			handleError("pushing changes", err)
-			fmt.Printf("Successfully pushed changes.")
+			fmt.Printf("Successfully merged and closed changes.")
 		}
 	},
 }
