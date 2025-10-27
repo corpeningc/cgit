@@ -72,7 +72,7 @@ var manageCmd = &cobra.Command{
 		handleError("getting repository status", err)
 
 		if len(repoStatus.UnstagedFiles) == 0 {
-			fmt.Println("No unstaged files to add.")
+			fmt.Println("No untracked changes.")
 			return
 		}
 
