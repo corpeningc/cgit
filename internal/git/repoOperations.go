@@ -74,7 +74,12 @@ func (repo *GitRepo) Push() error {
 	statusCmd := exec.Command("git", "status")
 	statusCmd.Env = os.Environ()
 	statusCmd.Dir = repo.WorkDir
-	statusCmd.Run()
+
+	err = statusCmd.Run()
+
+	if err != nil {
+		return err
+	}
 
 	pushCmd := exec.Command("git", "push", "origin", currentBranch)
 	pushCmd.Env = os.Environ()
@@ -168,4 +173,3 @@ func (repo *GitRepo) FullClean() error {
 	err = cleanCmd.Run()
 	return formatCommandError("clean -fd", err, cleanStdout, cleanStderr)
 }
-
