@@ -346,7 +346,8 @@ var featureCmd = &cobra.Command{
 			fmt.Printf("Successfully merged %s into %s\n", branchName, origin)
 
 			err = repo.DeleteBranch(branchName)
-			handleError("deleting feature branch", err)
+			handleError("deleting feature branch\n", err)
+			fmt.Printf("Deleting branch %s", branchName)
 
 			err = repo.Push()
 			handleError("pushing changes", err)
