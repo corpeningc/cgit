@@ -364,7 +364,7 @@ var featureCmd = &cobra.Command{
 
 			err = repo.Push()
 			handleError("pushing changes", err)
-			fmt.Printf("Successfully pushed changes.")
+			fmt.Println("Successfully pushed changes.")
 		}
 	},
 }
