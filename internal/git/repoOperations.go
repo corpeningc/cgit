@@ -120,6 +120,7 @@ func (repo *GitRepo) GetRepositoryStatus() (*RepoStatus, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	status.StagedFiles = stagedFiles
 	status.UnstagedFiles = unstagedFiles
 

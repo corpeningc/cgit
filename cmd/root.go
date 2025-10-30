@@ -56,6 +56,8 @@ func init() {
 	featureCmd.Flags().StringP("new", "n", "", "The name of the new feature branch")
 	featureCmd.Flags().BoolP("close", "c", false, "The name of the branch to close after creating the new feature branch")
 	rootCmd.AddCommand(featureCmd)
+
+	rootCmd.AddCommand(statusCommand)
 }
 
 var manageCmd = &cobra.Command{
@@ -352,6 +354,32 @@ var featureCmd = &cobra.Command{
 			err = repo.Push()
 			handleError("pushing changes", err)
 			fmt.Printf("Successfully pushed changes.")
+		}
+	},
+}
+
+var statusCommand = &cobra.Command{
+	Use:     "status",
+	Aliases: []string{"st"},
+	Short:   "Get the status of the current working directory",
+	Run: func(cmd *cobra.Command, args []string) {
+		repo := git.New(".")
+
+		repoStatus, err := repo.GetRepositoryStatus()
+		if err != nil {
+			handleError("using status command", nil)
+		}
+
+		fmt.Printf("Fetching repo status for %s\n", repoStatus.CurrentBranch)
+
+		fmt.Printf("Staged Files: \n")
+		for _, file := range repoStatus.StagedFiles {
+			fmt.Printf("%s \t %s\n", file.Status, file.Path)
+		}
+
+		fmt.Printf("Unstaged Files: \n")
+		for _, file := range repoStatus.UnstagedFiles {
+			fmt.Printf("%s \t %s\n", file.Status, file.Path)
 		}
 	},
 }

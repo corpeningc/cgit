@@ -9,7 +9,7 @@ import (
 
 type FileStatus struct {
 	Path     string
-	Status   string // M(odified), A(dded), D(eleted), R(enamed), ?(untracked)
+	Status   string // M(odified), A(dded), D(eleted), R(enamed), ?(untracked), U(nmerged)
 	Staged   bool
 	WorkTree bool
 }
