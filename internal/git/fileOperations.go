@@ -154,12 +154,20 @@ func (repo *GitRepo) FileDiff(filePath string) (string, error) {
 	return "No differences to show for this file.\n\nThis might be because:\n- The file is unmodified\n- The file was renamed\n- The file is not tracked by git", nil
 }
 
-func (r *GitRepo) RemoveFiles(files []string) error {
+func (r *GitRepo) RemoveFiles(files []string, staged bool) error {
 	if len(files) == 0 {
 		return nil
 	}
 
-	args := append([]string{"restore"}, files...)
+	args := []string{"restore"}
+
+	if !staged {
+		args = append(args, files...)
+	} else {
+		args = append(args, "--staged")
+		args = append(args, files...)
+	}
+
 	cmd := exec.Command("git", args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

@@ -39,6 +39,8 @@ func Execute() error {
 
 func init() {
 	rootCmd.AddCommand(manageCmd)
+	manageCmd.Flags().BoolP("staged", "s", false, "Manage Staged files")
+
 	rootCmd.AddCommand(mergeCommand)
 	rootCmd.AddCommand(commitAndPushCmd)
 	rootCmd.AddCommand(commitCmd)
@@ -68,17 +70,25 @@ var manageCmd = &cobra.Command{
 		"Use /: to search, space: to select files, c: to stage selected files, and r to restore selected files.",
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
+		files := []git.FileStatus{}
 
+		staged, err := cmd.Flags().GetBool("staged")
 		// Get unstaged files only
 		repoStatus, err := repo.GetRepositoryStatus()
 		handleError("getting repository status", err)
 
-		if len(repoStatus.UnstagedFiles) == 0 {
-			fmt.Println("No untracked changes.")
+		if !staged {
+			files = repoStatus.UnstagedFiles
+		} else {
+			files = repoStatus.StagedFiles
+		}
+
+		if len(files) == 0 {
+			fmt.Println("No files to manage.")
 			return
 		}
 
-		selected, removing, err := ui.SelectFiles(repo, repoStatus.UnstagedFiles)
+		selected, removing, err := ui.SelectFiles(repo, files, staged)
 		handleError("selecting files", err)
 
 		if len(selected) == 0 {
@@ -87,21 +97,22 @@ var manageCmd = &cobra.Command{
 		}
 
 		if removing {
-			err = repo.RemoveFiles(selected)
+			err = repo.RemoveFiles(selected, staged)
 			handleError("removing files", err)
-			fmt.Printf("Removed %d files .\n", len(selected))
+			fmt.Printf("Removed %d files.\n", len(selected))
 			for _, file := range selected {
 				fmt.Printf(" - %s\n", file)
 			}
 		} else {
-			err = repo.AddFiles(selected)
-			handleError("adding files", err)
-			fmt.Printf("Added %d files to staging.\n", len(selected))
-			for _, file := range selected {
-				fmt.Printf(" - %s\n", file)
+			if !staged {
+				err = repo.AddFiles(selected)
+				handleError("adding files", err)
+				fmt.Printf("Added %d files to staging.\n", len(selected))
+				for _, file := range selected {
+					fmt.Printf(" - %s\n", file)
+				}
 			}
 		}
-
 	},
 }
 
@@ -303,7 +314,7 @@ var pullCmd = &cobra.Command{
 
 var featureCmd = &cobra.Command{
 	Use:     "feature",
-	Aliases: []string{"f"},
+	Aliases: []string{"feat"},
 	Short:   "Pull latest from main, create and switch to a new feature branch",
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
@@ -361,7 +372,7 @@ var featureCmd = &cobra.Command{
 var statusCommand = &cobra.Command{
 	Use:     "status",
 	Aliases: []string{"st"},
-	Short:   "Get the status of the current working directory",
+	Short:   "Get the status of the current branch",
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
 

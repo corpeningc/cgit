@@ -36,6 +36,9 @@ type FilePickerModel struct {
 	showStatusChars bool
 	removing        bool
 
+	// Staged files?
+	staged bool
+
 	// Scrolling support
 	scrollOffset int
 	visibleLines int
@@ -52,7 +55,7 @@ type FilePickerModel struct {
 	searchStyle     lipgloss.Style
 }
 
-func NewFilePicker(repo *git.GitRepo, fileStatuses []git.FileStatus) FilePickerModel {
+func NewFilePicker(repo *git.GitRepo, fileStatuses []git.FileStatus, staged bool) FilePickerModel {
 	si := textinput.New()
 	si.Placeholder = "Search files..."
 	si.CharLimit = 100
@@ -70,6 +73,7 @@ func NewFilePicker(repo *git.GitRepo, fileStatuses []git.FileStatus) FilePickerM
 		selectedFiles:   make(map[string]bool),
 		searchInput:     si,
 		showStatusChars: true,
+		staged:          staged,
 
 		// Initialize styles
 		titleStyle: lipgloss.NewStyle().
@@ -380,9 +384,12 @@ func (m FilePickerModel) View() string {
 	help := ""
 	if m.mode == SearchMode {
 		help = "j/k: navigate | space: diff | enter: select | esc: back "
-	} else {
+	} else if !m.staged {
 		help = "j/k: navigate | /: search | space: diff | enter: select | c: stage | r: remove | a: select all | A: deselect all | q: quit"
+	} else {
+		help = "j/k: navigate | /: search | space: diff | enter: select | r: restore | a: select all | A: deselect all | q: quit"
 	}
+
 	sections = append(sections, "")
 	sections = append(sections, m.helpStyle.Render(help))
 
@@ -474,12 +481,12 @@ func (m FilePickerModel) getSelectedFiles() []string {
 }
 
 // SelectFiles provides an enhanced file picker specifically for unstaged files with status display
-func SelectFiles(repo *git.GitRepo, fileStatuses []git.FileStatus) ([]string, bool, error) {
+func SelectFiles(repo *git.GitRepo, fileStatuses []git.FileStatus, staged bool) ([]string, bool, error) {
 	if len(fileStatuses) == 0 {
 		return []string{}, false, nil
 	}
 
-	m := NewFilePicker(repo, fileStatuses)
+	m := NewFilePicker(repo, fileStatuses, staged)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	finalModel, err := p.Run()
