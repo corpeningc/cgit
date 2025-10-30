@@ -73,6 +73,7 @@ var manageCmd = &cobra.Command{
 		files := []git.FileStatus{}
 
 		staged, err := cmd.Flags().GetBool("staged")
+		handleError("getting staged flag", err)
 		// Get unstaged files only
 		repoStatus, err := repo.GetRepositoryStatus()
 		handleError("getting repository status", err)
@@ -240,19 +241,22 @@ var switchBranchCmd = &cobra.Command{
 				// Proceed to switch branches
 			case "s":
 				_, err = reader.Discard(0)
-
 				handleError("discarding input", err)
+
 				// Read stash name
 				fmt.Print("Enter stash name: ")
-				handleError("reading stash name", err)
 				stashName, err = reader.ReadString('\n')
+				handleError("reading stash name", err)
+
 				stashName = strings.TrimSpace(stashName)
 				if stashName == "" {
 					fmt.Println("No stash name provided. Aborting switch.")
 					return
 				}
+
 				err = repo.Stash(stashName)
 				handleError("stashing changes", err)
+
 				fmt.Printf("Changes stashed as '%s'.\n", stashName)
 			}
 		}
@@ -377,9 +381,7 @@ var statusCommand = &cobra.Command{
 		repo := git.New(".")
 
 		repoStatus, err := repo.GetRepositoryStatus()
-		if err != nil {
-			handleError("using status command", nil)
-		}
+		handleError("using status command", err)
 
 		fmt.Printf("Fetching repo status for %s\n", repoStatus.CurrentBranch)
 
