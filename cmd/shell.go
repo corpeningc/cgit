@@ -103,9 +103,6 @@ func handleSpecialCommand(input string) bool {
 	case "clear", "cls":
 		fmt.Print("\033[H\033[2J")
 		return true
-	case "help":
-		// Pass the rootCmd as parameter instead of referencing directly
-		return true
 	}
 	return false
 }
