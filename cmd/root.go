@@ -24,6 +24,11 @@ var rootCmd = &cobra.Command{
 	Short: "A simplified git workflow tool",
 	Long:  "Simplifies common git operations with interactive interfaces",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Skip validation for shell command
+		if cmd.Name() == "shell" {
+			return
+		}
+
 		_, err := exec.LookPath("git")
 		handleError("checking for git installation", err)
 
@@ -38,6 +43,14 @@ func Execute() error {
 }
 
 func init() {
+	// Set the Run function after initialization to avoid circular dependency
+	rootCmd.Run = func(cmd *cobra.Command, args []string) {
+		// If no subcommand provided, launch interactive shell
+		runInteractiveShell()
+	}
+
+	rootCmd.AddCommand(shellCmd)
+
 	rootCmd.AddCommand(manageCmd)
 	manageCmd.Flags().BoolP("staged", "s", false, "Manage Staged files")
 
