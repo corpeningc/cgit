@@ -12,10 +12,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func handleError(operation string, err error) {
+func HandleError(operation string, err error, close bool) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error %s: %v\n", operation, err)
-		os.Exit(1)
+		if close {
+			os.Exit(1)
+		}
 	}
 }
 
@@ -30,11 +32,11 @@ var rootCmd = &cobra.Command{
 		}
 
 		_, err := exec.LookPath("git")
-		handleError("checking for git installation", err)
+		HandleError("checking for git installation", err, true)
 
 		repo := git.New(".")
 		_, err = repo.GetCurrentBranch()
-		handleError("checking for git repository", err)
+		HandleError("checking for git repository", err, true)
 	},
 }
 
@@ -63,7 +65,9 @@ func init() {
 	switchBranchCmd.Flags().BoolP("remote", "r", false, "Include remote branches in the branch list")
 	rootCmd.AddCommand(switchBranchCmd)
 
-	rootCmd.AddCommand(stashPopCmd)
+	rootCmd.AddCommand(popCmd)
+	rootCmd.AddCommand(storeCmd)
+
 	rootCmd.AddCommand(fullCleanCmd)
 	rootCmd.AddCommand(pullCmd)
 
@@ -86,10 +90,10 @@ var manageCmd = &cobra.Command{
 		files := []git.FileStatus{}
 
 		staged, err := cmd.Flags().GetBool("staged")
-		handleError("getting staged flag", err)
+		HandleError("getting staged flag", err, true)
 		// Get unstaged files only
 		repoStatus, err := repo.GetRepositoryStatus()
-		handleError("getting repository status", err)
+		HandleError("getting repository status", err, true)
 
 		if !staged {
 			files = repoStatus.UnstagedFiles
@@ -103,7 +107,7 @@ var manageCmd = &cobra.Command{
 		}
 
 		selected, removing, err := ui.SelectFiles(repo, files, staged)
-		handleError("selecting files", err)
+		HandleError("selecting files", err, true)
 
 		if len(selected) == 0 {
 			fmt.Println("No files selected.")
@@ -112,7 +116,7 @@ var manageCmd = &cobra.Command{
 
 		if removing {
 			err = repo.RemoveFiles(selected, staged)
-			handleError("removing files", err)
+			HandleError("removing files", err, true)
 			fmt.Printf("Removed %d files.\n", len(selected))
 			for _, file := range selected {
 				fmt.Printf(" - %s\n", file)
@@ -120,7 +124,7 @@ var manageCmd = &cobra.Command{
 		} else {
 			if !staged {
 				err = repo.AddFiles(selected)
-				handleError("adding files", err)
+				HandleError("adding files", err, true)
 				fmt.Printf("Added %d files to staging.\n", len(selected))
 				for _, file := range selected {
 					fmt.Printf(" - %s\n", file)
@@ -138,7 +142,7 @@ var mergeCommand = &cobra.Command{
 		repo := git.New(".")
 
 		err := repo.MergeLatest(branch)
-		handleError("merging latest changes", err)
+		HandleError("merging latest changes", err, true)
 
 		fmt.Println("Successfully merged latest changes.")
 	},
@@ -154,10 +158,10 @@ var commitAndPushCmd = &cobra.Command{
 
 		commitMsg := args[0]
 		err := repo.Commit(commitMsg)
-		handleError("committing changes", err)
+		HandleError("committing changes", err, true)
 
 		err = repo.Push()
-		handleError("pushing changes", err)
+		HandleError("pushing changes", err, true)
 
 		fmt.Println("Successfully committed and pushed changes.")
 	},
@@ -171,7 +175,7 @@ var commitCmd = &cobra.Command{
 
 		commitMsg := args[0]
 		err := repo.Commit(commitMsg)
-		handleError("committing changes", err)
+		HandleError("committing changes", err, true)
 
 		fmt.Println("Successfully committed changes.")
 	},
@@ -184,7 +188,7 @@ var pushCmd = &cobra.Command{
 		repo := git.New(".")
 
 		err := repo.Push()
-		handleError("pushing changes", err)
+		HandleError("pushing changes", err, true)
 
 		fmt.Println("Successfully pushed changes.")
 	},
@@ -199,10 +203,10 @@ var newBranchCmd = &cobra.Command{
 
 		branchName := args[0]
 		err := repo.CreateBranch(branchName)
-		handleError("creating branch", err)
+		HandleError("creating branch", err, true)
 
 		err = repo.SwitchBranch(branchName)
-		handleError("switching branch", err)
+		HandleError("switching branch", err, true)
 
 		fmt.Printf("Successfully created and switched to branch '%s'.\n", branchName)
 	},
@@ -234,14 +238,14 @@ var switchBranchCmd = &cobra.Command{
 
 		// Check if working directory is clean
 		isClean, err := repo.IsClean()
-		handleError("checking repository status", err)
+		HandleError("checking repository status", err, true)
 
 		if !isClean {
 			fmt.Println("You need to stash or delete your changes before swapping. Press 'd' to delete changes or 's' to enter a stash name")
 			reader := bufio.NewReader(os.Stdin)
 			// Read s or d input
 			input, err := reader.ReadString('\n')
-			handleError("reading stash name", err)
+			HandleError("reading stash name", err, true)
 
 			input = strings.TrimSpace(input)
 			var stashName string
@@ -249,17 +253,17 @@ var switchBranchCmd = &cobra.Command{
 			switch input {
 			case "d":
 				err = repo.FullClean()
-				handleError("deleting changes", err)
+				HandleError("deleting changes", err, true)
 				fmt.Println("Changes deleted.")
 				// Proceed to switch branches
 			case "s":
 				_, err = reader.Discard(0)
-				handleError("discarding input", err)
+				HandleError("discarding input", err, true)
 
 				// Read stash name
 				fmt.Print("Enter stash name: ")
 				stashName, err = reader.ReadString('\n')
-				handleError("reading stash name", err)
+				HandleError("reading stash name", err, true)
 
 				stashName = strings.TrimSpace(stashName)
 				if stashName == "" {
@@ -267,31 +271,50 @@ var switchBranchCmd = &cobra.Command{
 					return
 				}
 
-				err = repo.Stash(stashName)
-				handleError("stashing changes", err)
+				err = repo.StashWithMessage(stashName)
+				HandleError("stashing changes", err, true)
 
 				fmt.Printf("Changes stashed as '%s'.\n", stashName)
 			}
 		}
 
 		err = repo.SwitchBranch(branchName)
-		handleError("switching branches", err)
+		HandleError("switching branches", err, true)
 
 		fmt.Printf("Successfully switched to branch '%s'.\n", branchName)
 	},
 }
 
-var stashPopCmd = &cobra.Command{
-	Use:     "stash-pop",
-	Aliases: []string{"sp"},
-	Short:   "Pop the most recent stash",
+var popCmd = &cobra.Command{
+	Use:   "pop",
+	Short: "Pop the most recent stash",
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
 
 		err := repo.StashPop()
-		handleError("popping stash", err)
+		HandleError("popping stash", err, true)
 
 		fmt.Println("Successfully popped stash.")
+	},
+}
+
+var storeCmd = &cobra.Command{
+	Use:   "store",
+	Short: "Store changes in a stash",
+	Run: func(cmd *cobra.Command, args []string) {
+		repo := git.New(".")
+		var err error
+
+		if len(args) == 1 {
+			var stashName = args[0]
+			err = repo.StashWithMessage(stashName)
+		} else {
+			err = repo.Stash()
+		}
+
+		HandleError("stashing changes", err, true)
+
+		fmt.Println("Successfully stored changes.")
 	},
 }
 
@@ -303,7 +326,7 @@ var fullCleanCmd = &cobra.Command{
 		repo := git.New(".")
 
 		err := repo.FullClean()
-		handleError("performing full clean", err)
+		HandleError("performing full clean", err, true)
 
 		fmt.Println("Successfully cleaned repository.")
 	},
@@ -316,14 +339,14 @@ var pullCmd = &cobra.Command{
 		repo := git.New(".")
 		// If no branch provided, use current branch
 		branchName, err := repo.GetCurrentBranch()
-		handleError("getting current branch", err)
+		HandleError("getting current branch", err, true)
 
 		if len(args) > 0 {
 			branchName = args[0]
 		}
 
 		err = repo.PullLatestRemote(branchName)
-		handleError("pulling latest changes", err)
+		HandleError("pulling latest changes", err, true)
 
 		fmt.Println("Successfully pulled latest changes for branch", branchName)
 	},
@@ -340,47 +363,47 @@ var featureCmd = &cobra.Command{
 		close := cmd.Flags().Changed("close")
 
 		if !new && !close {
-			handleError("using feature command", fmt.Errorf("either -new or -close flag must be provided"))
+			HandleError("using feature command", fmt.Errorf("either -new or -close flag must be provided"), true)
 		}
 
-		handleError("getting origin flag", err)
+		HandleError("getting origin flag", err, true)
 
 		if new {
 			branchName, err := cmd.Flags().GetString("new")
-			handleError("getting close flag", err)
+			HandleError("getting close flag", err, true)
 
 			err = repo.PullLatestRemote(origin)
-			handleError("pulling latest changes", err)
+			HandleError("pulling latest changes", err, true)
 
 			err = repo.SwitchBranch(origin)
-			handleError("switching to origin branch", err)
+			HandleError("switching to origin branch", err, true)
 
 			err = repo.CreateBranch(branchName)
-			handleError("creating feature branch", err)
+			HandleError("creating feature branch", err, true)
 
 			fmt.Println("Successfully created and switched to feature branch", branchName)
 		} else if close {
 			// Merge the branch to the origin branch and delete it
 			branchName, err := repo.GetCurrentBranch()
-			handleError("getting close flag", err)
+			HandleError("getting close flag", err, true)
 
 			err = repo.SwitchBranch(origin)
-			handleError("switching to origin branch", err)
+			HandleError("switching to origin branch", err, true)
 			fmt.Printf("Switching to %s\n", origin)
 
 			err = repo.PullLatestRemote(origin)
-			handleError("pulling latest changes", err)
+			HandleError("pulling latest changes", err, true)
 
 			err = repo.MergeLocalBranch(branchName)
-			handleError("closing feature branch", err)
+			HandleError("closing feature branch", err, true)
 			fmt.Printf("Successfully merged %s into %s\n", branchName, origin)
 
 			err = repo.DeleteBranch(branchName)
-			handleError("deleting feature branch\n", err)
+			HandleError("deleting feature branch\n", err, true)
 			fmt.Printf("Deleting branch %s\n", branchName)
 
 			err = repo.Push()
-			handleError("pushing changes", err)
+			HandleError("pushing changes", err, true)
 			fmt.Println("Successfully pushed changes.")
 		}
 	},
@@ -394,7 +417,7 @@ var statusCommand = &cobra.Command{
 		repo := git.New(".")
 
 		repoStatus, err := repo.GetRepositoryStatus()
-		handleError("using status command", err)
+		HandleError("using status command", err, true)
 
 		fmt.Printf("Fetching repo status for %s\n", repoStatus.CurrentBranch)
 
