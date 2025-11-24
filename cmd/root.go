@@ -271,7 +271,7 @@ var switchBranchCmd = &cobra.Command{
 					return
 				}
 
-				err = repo.StashWithMessage(stashName)
+				err = repo.Stash(stashName)
 				HandleError("stashing changes", err, true)
 
 				fmt.Printf("Changes stashed as '%s'.\n", stashName)
@@ -307,9 +307,9 @@ var storeCmd = &cobra.Command{
 
 		if len(args) == 1 {
 			var stashName = args[0]
-			err = repo.StashWithMessage(stashName)
+			err = repo.Stash(stashName)
 		} else {
-			err = repo.Stash()
+			err = repo.Stash("")
 		}
 
 		HandleError("stashing changes", err, true)

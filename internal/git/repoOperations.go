@@ -127,20 +127,15 @@ func (repo *GitRepo) GetRepositoryStatus() (*RepoStatus, error) {
 	return status, nil
 }
 
-func (repo *GitRepo) Stash() error {
-	cmd := exec.Command("git", "stash")
-	cmd.Dir = repo.WorkDir
+func (repo *GitRepo) Stash(message string) error {
+	var cmd *exec.Cmd
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	if message != "" {
+		cmd = exec.Command("git", "stash", "push", "-m", message)
+	} else {
+		cmd = exec.Command("git", "stash")
+	}
 
-	err := cmd.Run()
-	return formatCommandError("stash changes", err, stdout, stderr)
-}
-
-func (repo *GitRepo) StashWithMessage(message string) error {
-	cmd := exec.Command("git", "stash", "push", "-m", message)
 	cmd.Dir = repo.WorkDir
 
 	var stdout, stderr bytes.Buffer
