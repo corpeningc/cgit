@@ -370,7 +370,7 @@ var featureCmd = &cobra.Command{
 
 		if new {
 			branchName, err := cmd.Flags().GetString("new")
-			HandleError("getting close flag", err, true)
+			HandleError("getting new flag", err, true)
 
 			err = repo.PullLatestRemote(origin)
 			HandleError("pulling latest changes", err, true)
@@ -419,16 +419,29 @@ var statusCommand = &cobra.Command{
 		repoStatus, err := repo.GetRepositoryStatus()
 		HandleError("using status command", err, true)
 
-		fmt.Printf("Fetching repo status for %s\n", repoStatus.CurrentBranch)
+		fmt.Printf("Fetching repo status for %s\n\n", repoStatus.CurrentBranch)
 
-		fmt.Printf("Staged Files: \n")
-		for _, file := range repoStatus.StagedFiles {
-			fmt.Printf("%s \t %s\n", file.Status, file.Path)
+		if len(repoStatus.StagedFiles) > 0 {
+			fmt.Printf("Staged Changes: \n")
+			for _, file := range repoStatus.StagedFiles {
+				fmt.Printf("%s \t %s\n", file.Status, file.Path)
+			}
+		} else {
+			fmt.Println("No staged changes")
 		}
 
-		fmt.Printf("Unstaged Files: \n")
-		for _, file := range repoStatus.UnstagedFiles {
-			fmt.Printf("%s \t %s\n", file.Status, file.Path)
+		fmt.Println()
+
+		if len(repoStatus.UnstagedFiles) > 0 {
+			fmt.Printf("Unstaged Files: \n")
+			for _, file := range repoStatus.UnstagedFiles {
+				fmt.Printf("%s \t %s\n", file.Status, file.Path)
+			}
+		} else {
+			fmt.Println("No unstaged changes")
 		}
+
+		fmt.Println()
+
 	},
 }
