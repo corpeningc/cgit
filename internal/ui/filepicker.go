@@ -3,12 +3,28 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/corpeningc/cgit/internal/git"
 )
+
+type gitOperationCompleteMsg struct {
+	success       bool
+	error         error
+	operation     string
+	filesAffected []string
+}
+
+type statusRefreshMsg struct {
+	stagedFiles   []git.FileStatus
+	unstagedFiles []git.FileStatus
+	error         error
+}
+
+type clearStatusMsg struct{}
 
 type FilePickerMode int
 
@@ -29,6 +45,10 @@ type FilePickerModel struct {
 	selectedFiles      map[string]bool
 	stagedSelections   map[string]bool
 	unstagedSelections map[string]bool
+
+	operationInProgress bool
+	lastOperationStatus string
+	showStatusMessage   bool
 
 	currentIndex    int
 	mode            FilePickerMode
@@ -149,6 +169,68 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.visibleLines = msg.Height - 6 // Account for title, help, etc.
 
+	case gitOperationCompleteMsg:
+		m.operationInProgress = false
+		if msg.success {
+			action := "staged"
+			if msg.operation == "restore" {
+				if m.staged {
+					action = "restored from staging"
+				} else {
+					action = "discarded"
+				}
+			}
+
+			m.lastOperationStatus = fmt.Sprintf("✓ %s %d file(s)", action, len(msg.filesAffected))
+			m.showStatusMessage = true
+			return m, tea.Batch(
+				m.refreshRepositoryStatus(),
+				m.clearStatusAfterDelay(),
+			)
+		} else {
+			m.lastOperationStatus = fmt.Sprintf("✗ Error: %v", msg.error)
+			m.showStatusMessage = true
+			return m, m.clearStatusAfterDelay()
+		}
+
+	case statusRefreshMsg:
+		if msg.error != nil {
+			m.lastOperationStatus = fmt.Sprintf("✗ Failed to refresh: %v", msg.error)
+			m.showStatusMessage = true
+			return m, m.clearStatusAfterDelay()
+		}
+
+		m.stagedFileStatuses = msg.stagedFiles
+		m.unstagedFileStatuses = msg.unstagedFiles
+
+		if m.staged {
+			m.fileStatuses = m.stagedFileStatuses
+			m.selectedFiles = m.stagedSelections
+		} else {
+			m.fileStatuses = m.unstagedFileStatuses
+			m.selectedFiles = m.unstagedSelections
+		}
+
+		m.files = []string{}
+		for _, status := range m.fileStatuses {
+			m.files = append(m.files, status.Path)
+		}
+
+		if m.currentIndex >= len(m.files) {
+			if len(m.files) > 0 {
+				m.currentIndex = len(m.files) - 1
+			} else {
+				m.currentIndex = 0
+			}
+		}
+		m.adjustScrolling()
+
+		return m, nil
+
+	case clearStatusMsg:
+		m.showStatusMessage = false
+		return m, nil
+
 	case tea.KeyMsg:
 		if m.quitting {
 			return m, tea.Quit
@@ -180,16 +262,32 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "c", "ctrl+enter":
-			// Confirm selection (new binding)
-			m.confirmed = true
-			m.quitting = true
-			return m, tea.Quit
+			if m.operationInProgress || len(m.getSelectedFiles()) == 0 {
+				return m, nil
+			}
+
+			if m.staged {
+				m.lastOperationStatus = "Cannot stage already staged files. Use 'r' to restore."
+				m.showStatusMessage = true
+				return m, tea.Batch(m.clearStatusAfterDelay())
+			}
+
+			selectedFiles := m.getSelectedFiles()
+			m.operationInProgress = true
+			m.selectedFiles = make(map[string]bool)
+
+			return m, m.performGitOperation(selectedFiles, false)
 
 		case "r":
-			m.confirmed = true
-			m.quitting = true
-			m.removing = true
-			return m, tea.Quit
+			if m.operationInProgress || len(m.getSelectedFiles()) == 0 {
+				return m, nil
+			}
+
+			selectedFiles := m.getSelectedFiles()
+			m.operationInProgress = true
+			m.selectedFiles = make(map[string]bool)
+
+			return m, m.performGitOperation(selectedFiles, true)
 		case "/":
 			if m.mode == NormalMode {
 				m.mode = SearchMode
@@ -334,6 +432,18 @@ func (m FilePickerModel) View() string {
 	// Title
 	title := m.titleStyle.Render("Select files to manage --- ", managing)
 	sections = append(sections, title)
+
+	if m.showStatusMessage && m.lastOperationStatus != "" {
+		statusStyle := m.checkedStyle
+		if strings.HasPrefix(m.lastOperationStatus, "✗") {
+			statusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
+		}
+		sections = append(sections, statusStyle.Render(m.lastOperationStatus))
+	}
+
+	if m.operationInProgress {
+		sections = append(sections, m.searchStyle.Render("⏳ Operation in progress..."))
+	}
 
 	if m.mode == SearchMode {
 		// Show search input
@@ -528,6 +638,45 @@ func (m FilePickerModel) getSelectedFiles() []string {
 		}
 	}
 	return selected
+}
+
+func (m FilePickerModel) performGitOperation(files []string, restore bool) tea.Cmd {
+	return func() tea.Msg {
+		var err error
+		var operation string
+
+		if restore {
+			operation = "restore"
+			err = m.repo.RemoveFiles(files, m.staged)
+		} else {
+			operation = "stage"
+			err = m.repo.AddFiles(files)
+		}
+
+		return gitOperationCompleteMsg{
+			success:       err == nil,
+			error:         err,
+			operation:     operation,
+			filesAffected: files,
+		}
+	}
+}
+
+func (m FilePickerModel) refreshRepositoryStatus() tea.Cmd {
+	return func() tea.Msg {
+		stagedFiles, unstagedFiles, err := m.repo.GetFileStatuses()
+		return statusRefreshMsg{
+			stagedFiles:   stagedFiles,
+			unstagedFiles: unstagedFiles,
+			error:         err,
+		}
+	}
+}
+
+func (m FilePickerModel) clearStatusAfterDelay() tea.Cmd {
+	return tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+		return clearStatusMsg{}
+	})
 }
 
 // SelectFiles provides an enhanced file picker specifically for unstaged files with status display

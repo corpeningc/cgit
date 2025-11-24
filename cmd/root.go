@@ -87,7 +87,6 @@ var manageCmd = &cobra.Command{
 		"Use /: to search, space: to select files, c: to stage selected files, and r to restore selected files.",
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
-		files := []git.FileStatus{}
 
 		staged, err := cmd.Flags().GetBool("staged")
 		HandleError("getting staged flag", err, true)
@@ -95,42 +94,13 @@ var manageCmd = &cobra.Command{
 		repoStatus, err := repo.GetRepositoryStatus()
 		HandleError("getting repository status", err, true)
 
-		if !staged {
-			files = repoStatus.UnstagedFiles
-		} else {
-			files = repoStatus.StagedFiles
-		}
-
-		if len(files) == 0 {
+		if len(repoStatus.StagedFiles) == 0 && len(repoStatus.UnstagedFiles) == 0 {
 			fmt.Println("No files to manage.")
 			return
 		}
 
-		selected, removing, err := ui.SelectFiles(repo, repoStatus.StagedFiles, repoStatus.UnstagedFiles, staged)
+		_, _, err = ui.SelectFiles(repo, repoStatus.StagedFiles, repoStatus.UnstagedFiles, staged)
 		HandleError("selecting files", err, true)
-
-		if len(selected) == 0 {
-			fmt.Println("No files selected.")
-			return
-		}
-
-		if removing {
-			err = repo.RemoveFiles(selected, staged)
-			HandleError("removing files", err, true)
-			fmt.Printf("Removed %d files.\n", len(selected))
-			for _, file := range selected {
-				fmt.Printf(" - %s\n", file)
-			}
-		} else {
-			if !staged {
-				err = repo.AddFiles(selected)
-				HandleError("adding files", err, true)
-				fmt.Printf("Added %d files to staging.\n", len(selected))
-				for _, file := range selected {
-					fmt.Printf(" - %s\n", file)
-				}
-			}
-		}
 	},
 }
 
