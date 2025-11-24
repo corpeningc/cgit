@@ -106,7 +106,7 @@ var manageCmd = &cobra.Command{
 			return
 		}
 
-		selected, removing, err := ui.SelectFiles(repo, files, staged)
+		selected, removing, err := ui.SelectFiles(repo, repoStatus.StagedFiles, repoStatus.UnstagedFiles, staged)
 		HandleError("selecting files", err, true)
 
 		if len(selected) == 0 {

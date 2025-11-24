@@ -19,10 +19,17 @@ const (
 )
 
 type FilePickerModel struct {
-	repo            *git.GitRepo
-	files           []string
-	fileStatuses    []git.FileStatus
-	selectedFiles   map[string]bool
+	repo  *git.GitRepo
+	files []string
+
+	fileStatuses         []git.FileStatus
+	stagedFileStatuses   []git.FileStatus
+	unstagedFileStatuses []git.FileStatus
+
+	selectedFiles      map[string]bool
+	stagedSelections   map[string]bool
+	unstagedSelections map[string]bool
+
 	currentIndex    int
 	mode            FilePickerMode
 	searchInput     textinput.Model
@@ -38,7 +45,6 @@ type FilePickerModel struct {
 
 	// Staged files?
 	staged bool
-
 	// Scrolling support
 	scrollOffset int
 	visibleLines int
@@ -55,25 +61,37 @@ type FilePickerModel struct {
 	searchStyle     lipgloss.Style
 }
 
-func NewFilePicker(repo *git.GitRepo, fileStatuses []git.FileStatus, staged bool) FilePickerModel {
+func NewFilePicker(repo *git.GitRepo, stagedFileStatuses []git.FileStatus, unstagedFileStatuses []git.FileStatus, startInStaged bool) FilePickerModel {
 	si := textinput.New()
 	si.Placeholder = "Search files..."
 	si.CharLimit = 100
 	si.Width = 50
 
+	var activeFileStatuses []git.FileStatus
 	var files []string
-	for _, status := range fileStatuses {
+
+	if startInStaged {
+		activeFileStatuses = stagedFileStatuses
+	} else {
+		activeFileStatuses = unstagedFileStatuses
+	}
+
+	for _, status := range activeFileStatuses {
 		files = append(files, status.Path)
 	}
 
 	return FilePickerModel{
-		repo:            repo,
-		files:           files,
-		fileStatuses:    fileStatuses,
-		selectedFiles:   make(map[string]bool),
-		searchInput:     si,
-		showStatusChars: true,
-		staged:          staged,
+		repo:                 repo,
+		files:                files,
+		fileStatuses:         activeFileStatuses,
+		stagedFileStatuses:   stagedFileStatuses,
+		unstagedFileStatuses: unstagedFileStatuses,
+		selectedFiles:        make(map[string]bool),
+		stagedSelections:     make(map[string]bool),
+		unstagedSelections:   make(map[string]bool),
+		searchInput:          si,
+		showStatusChars:      true,
+		staged:               startInStaged,
 
 		// Initialize styles
 		titleStyle: lipgloss.NewStyle().
@@ -246,6 +264,32 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
+		case "tab":
+			if m.mode == NormalMode {
+				if m.staged {
+					m.stagedSelections = m.selectedFiles
+				} else {
+					m.unstagedSelections = m.selectedFiles
+				}
+
+				m.staged = !m.staged
+				if m.staged {
+					m.fileStatuses = m.stagedFileStatuses
+					m.selectedFiles = m.stagedSelections
+				} else {
+					m.fileStatuses = m.unstagedFileStatuses
+					m.selectedFiles = m.unstagedSelections
+				}
+
+				m.files = []string{}
+				for _, status := range m.fileStatuses {
+					m.files = append(m.files, status.Path)
+				}
+
+				m.currentIndex = 0
+				m.scrollOffset = 0
+			}
+
 		case "A":
 			if m.mode == NormalMode {
 				// Deselect all files
@@ -391,9 +435,9 @@ func (m FilePickerModel) View() string {
 	if m.mode == SearchMode {
 		help = "space: diff | enter: select | esc: back "
 	} else if !m.staged {
-		help = "/: search | space: diff | enter: select | c: stage | r: remove | a: select all | A: deselect all | q: quit"
+		help = "Tab: toggle /: search | space: diff | enter: select | c: stage | r: remove | a: select all | A: deselect all | q: quit"
 	} else {
-		help = " /: search | space: diff | enter: select | r: restore | a: select all | A: deselect all | q: quit"
+		help = "Tab: toggle /: search | space: diff | enter: select | r: restore | a: select all | A: deselect all | q: quit"
 	}
 
 	sections = append(sections, "")
@@ -487,12 +531,12 @@ func (m FilePickerModel) getSelectedFiles() []string {
 }
 
 // SelectFiles provides an enhanced file picker specifically for unstaged files with status display
-func SelectFiles(repo *git.GitRepo, fileStatuses []git.FileStatus, staged bool) ([]string, bool, error) {
-	if len(fileStatuses) == 0 {
+func SelectFiles(repo *git.GitRepo, stagedFileStatuses []git.FileStatus, unstagedFileStatuses []git.FileStatus, staged bool) ([]string, bool, error) {
+	if len(stagedFileStatuses) == 0 && len(unstagedFileStatuses) == 0 {
 		return []string{}, false, nil
 	}
 
-	m := NewFilePicker(repo, fileStatuses, staged)
+	m := NewFilePicker(repo, stagedFileStatuses, unstagedFileStatuses, staged)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	finalModel, err := p.Run()
