@@ -104,9 +104,14 @@ func (repo *GitRepo) GetFileStatuses() ([]FileStatus, []FileStatus, error) {
 	return stagedFiles, unstagedFiles, nil
 }
 
-func (repo *GitRepo) FileDiff(filePath string) (string, error) {
+func (repo *GitRepo) FileDiff(filePath string, staged bool) (string, error) {
 	// First try normal diff for modified files
-	cmd := exec.Command("git", "diff", "--color=always", filePath)
+	var cmd *exec.Cmd
+	if staged {
+		cmd = exec.Command("git", "diff", "--staged", "--color=always", filePath)
+	} else {
+		cmd = exec.Command("git", "diff", "--color=always", filePath)
+	}
 	cmd.Dir = repo.WorkDir
 
 	var stdout, stderr bytes.Buffer

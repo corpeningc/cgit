@@ -15,6 +15,8 @@ type DiffViewerModel struct {
 	ready    bool
 	err      error
 
+	staged bool
+
 	// Styles
 	titleStyle   lipgloss.Style
 	addedStyle   lipgloss.Style
@@ -160,7 +162,7 @@ func (m DiffViewerModel) View() string {
 
 func (m DiffViewerModel) loadDiff() tea.Cmd {
 	return func() tea.Msg {
-		content, err := m.repo.FileDiff(m.filePath)
+		content, err := m.repo.FileDiff(m.filePath, m.staged)
 		return diffLoadedMsg{
 			content: content,
 			err:     err,

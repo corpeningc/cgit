@@ -337,6 +337,7 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(m.files) > 0 {
 					filePath := m.files[m.currentIndex]
 					m.diffViewer = NewDiffViewerModel(m.repo, filePath)
+					m.diffViewer.staged = m.staged
 					m.mode = DiffMode
 					var cmds []tea.Cmd
 					cmds = append(cmds, m.diffViewer.Init())
@@ -363,12 +364,14 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "tab":
-			if m.mode == NormalMode {
+			if m.mode == NormalMode && !m.operationInProgress {
 				if m.staged {
 					m.stagedSelections = m.selectedFiles
 				} else {
 					m.unstagedSelections = m.selectedFiles
 				}
+
+				m.showStatusMessage = false
 
 				m.staged = !m.staged
 				if m.staged {
