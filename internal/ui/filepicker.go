@@ -280,9 +280,15 @@ func (m FilePickerModel) View() string {
 	}
 
 	var sections []string
+	var managing string
 
+	if m.staged {
+		managing = "Staged changes"
+	} else {
+		managing = "Unstaged changes"
+	}
 	// Title
-	title := m.titleStyle.Render("Select files to manage")
+	title := m.titleStyle.Render("Select files to manage --- ", managing)
 	sections = append(sections, title)
 
 	if m.mode == SearchMode {
@@ -383,11 +389,11 @@ func (m FilePickerModel) View() string {
 	// Help
 	help := ""
 	if m.mode == SearchMode {
-		help = "j/k: navigate | space: diff | enter: select | esc: back "
+		help = "space: diff | enter: select | esc: back "
 	} else if !m.staged {
-		help = "j/k: navigate | /: search | space: diff | enter: select | c: stage | r: remove | a: select all | A: deselect all | q: quit"
+		help = "/: search | space: diff | enter: select | c: stage | r: remove | a: select all | A: deselect all | q: quit"
 	} else {
-		help = "j/k: navigate | /: search | space: diff | enter: select | r: restore | a: select all | A: deselect all | q: quit"
+		help = " /: search | space: diff | enter: select | r: restore | a: select all | A: deselect all | q: quit"
 	}
 
 	sections = append(sections, "")
