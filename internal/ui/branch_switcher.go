@@ -133,6 +133,9 @@ func (m BranchSwitcherModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "esc":
 				m.mode = NormalMode
 				return m, nil
+			case "enter":
+				m.mode = SearchResultsMode
+				return m, nil
 			}
 		}
 
@@ -148,6 +151,49 @@ func (m BranchSwitcherModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// TODO: handle SearchResult mode
+	if m.mode == SearchResultsMode {
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.String() {
+			case "j":
+				if len(m.branches) > 0 {
+					m.currentIndex = (m.currentIndex + 1) % len(m.branches)
+					m.adjustScrolling()
+				}
+
+			case "k":
+				if len(m.branches) > 0 {
+					m.currentIndex = (m.currentIndex - 1 + len(m.branches)) % len(m.branches)
+					m.adjustScrolling()
+				}
+
+			case "enter":
+				isClean, err := m.repo.IsClean()
+				if err != nil {
+					return m, nil
+				}
+
+				branch := m.branches[m.currentIndex]
+
+				if !isClean {
+					err = m.repo.Stash("Dirty working directory while switching to " + branch)
+
+					if err != nil {
+						return m, nil
+					}
+				}
+
+				err = m.repo.SwitchBranch(branch)
+				if err != nil {
+					return m, nil
+				}
+
+				fmt.Printf("Successfully switched to branch '%s'.\n", branch)
+
+				return m, tea.Quit
+			}
+		}
+	}
 
 	switch msg := msg.(type) {
 
