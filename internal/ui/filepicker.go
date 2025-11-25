@@ -11,29 +11,6 @@ import (
 	"github.com/corpeningc/cgit/internal/git"
 )
 
-type gitOperationCompleteMsg struct {
-	success       bool
-	error         error
-	operation     string
-	filesAffected []string
-}
-
-type statusRefreshMsg struct {
-	stagedFiles   []git.FileStatus
-	unstagedFiles []git.FileStatus
-	error         error
-}
-
-type clearStatusMsg struct{}
-
-type FilePickerMode int
-
-const (
-	NormalMode FilePickerMode = iota
-	SearchMode
-	DiffMode
-)
-
 type FilePickerModel struct {
 	repo  *git.GitRepo
 	files []string
@@ -51,7 +28,7 @@ type FilePickerModel struct {
 	showStatusMessage   bool
 
 	currentIndex    int
-	mode            FilePickerMode
+	mode            Mode
 	searchInput     textinput.Model
 	searchQuery     string
 	filteredIndices []int
@@ -169,7 +146,7 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.visibleLines = msg.Height - 6 // Account for title, help, etc.
 
-	case gitOperationCompleteMsg:
+	case GitOperationCompleteMsg:
 		m.operationInProgress = false
 		if msg.success {
 			action := "staged"
@@ -193,7 +170,7 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.clearStatusAfterDelay()
 		}
 
-	case statusRefreshMsg:
+	case StatusRefreshMsg:
 		if msg.error != nil {
 			m.lastOperationStatus = fmt.Sprintf("✗ Failed to refresh: %v", msg.error)
 			m.showStatusMessage = true
@@ -227,7 +204,7 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, nil
 
-	case clearStatusMsg:
+	case ClearStatusMsg:
 		m.showStatusMessage = false
 		return m, nil
 
@@ -656,7 +633,7 @@ func (m FilePickerModel) performGitOperation(files []string, restore bool) tea.C
 			err = m.repo.AddFiles(files)
 		}
 
-		return gitOperationCompleteMsg{
+		return GitOperationCompleteMsg{
 			success:       err == nil,
 			error:         err,
 			operation:     operation,
@@ -668,7 +645,7 @@ func (m FilePickerModel) performGitOperation(files []string, restore bool) tea.C
 func (m FilePickerModel) refreshRepositoryStatus() tea.Cmd {
 	return func() tea.Msg {
 		stagedFiles, unstagedFiles, err := m.repo.GetFileStatuses()
-		return statusRefreshMsg{
+		return StatusRefreshMsg{
 			stagedFiles:   stagedFiles,
 			unstagedFiles: unstagedFiles,
 			error:         err,
@@ -678,7 +655,7 @@ func (m FilePickerModel) refreshRepositoryStatus() tea.Cmd {
 
 func (m FilePickerModel) clearStatusAfterDelay() tea.Cmd {
 	return tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
-		return clearStatusMsg{}
+		return ClearStatusMsg{}
 	})
 }
 

@@ -204,52 +204,58 @@ var switchBranchCmd = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
-		branchName := args[0]
+		branchName := ""
 
-		// Check if working directory is clean
-		isClean, err := repo.IsClean()
-		HandleError("checking repository status", err, true)
+		if len(args) == 1 {
+			branchName = args[0]
+			// Check if working directory is clean
+			isClean, err := repo.IsClean()
+			HandleError("checking repository status", err, true)
 
-		if !isClean {
-			fmt.Println("You need to stash or delete your changes before swapping. Press 'd' to delete changes or 's' to enter a stash name")
-			reader := bufio.NewReader(os.Stdin)
-			// Read s or d input
-			input, err := reader.ReadString('\n')
-			HandleError("reading stash name", err, true)
-
-			input = strings.TrimSpace(input)
-			var stashName string
-
-			switch input {
-			case "d":
-				err = repo.FullClean()
-				HandleError("deleting changes", err, true)
-				fmt.Println("Changes deleted.")
-				// Proceed to switch branches
-			case "s":
-				_, err = reader.Discard(0)
-				HandleError("discarding input", err, true)
-
-				// Read stash name
-				fmt.Print("Enter stash name: ")
-				stashName, err = reader.ReadString('\n')
+			if !isClean {
+				fmt.Println("You need to stash or delete your changes before swapping. Press 'd' to delete changes or 's' to enter a stash name")
+				reader := bufio.NewReader(os.Stdin)
+				// Read s or d input
+				input, err := reader.ReadString('\n')
 				HandleError("reading stash name", err, true)
 
-				stashName = strings.TrimSpace(stashName)
-				if stashName == "" {
-					fmt.Println("No stash name provided. Aborting switch.")
-					return
+				input = strings.TrimSpace(input)
+				var stashName string
+
+				switch input {
+				case "d":
+					err = repo.FullClean()
+					HandleError("deleting changes", err, true)
+					fmt.Println("Changes deleted.")
+					// Proceed to switch branches
+				case "s":
+					_, err = reader.Discard(0)
+					HandleError("discarding input", err, true)
+
+					// Read stash name
+					fmt.Print("Enter stash name: ")
+					stashName, err = reader.ReadString('\n')
+					HandleError("reading stash name", err, true)
+
+					stashName = strings.TrimSpace(stashName)
+					if stashName == "" {
+						fmt.Println("No stash name provided. Aborting switch.")
+						return
+					}
+
+					err = repo.Stash(stashName)
+					HandleError("stashing changes", err, true)
+
+					fmt.Printf("Changes stashed as '%s'.\n", stashName)
 				}
-
-				err = repo.Stash(stashName)
-				HandleError("stashing changes", err, true)
-
-				fmt.Printf("Changes stashed as '%s'.\n", stashName)
 			}
-		}
 
-		err = repo.SwitchBranch(branchName)
-		HandleError("switching branches", err, true)
+			err = repo.SwitchBranch(branchName)
+			HandleError("switching branches", err, true)
+		} else {
+			_, err := ui.SwitchBranches(repo)
+			HandleError("switching branches", err, true)
+		}
 
 		fmt.Printf("Successfully switched to branch '%s'.\n", branchName)
 	},
