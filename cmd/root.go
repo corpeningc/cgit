@@ -252,12 +252,12 @@ var switchBranchCmd = &cobra.Command{
 
 			err = repo.SwitchBranch(branchName)
 			HandleError("switching branches", err, true)
+			fmt.Printf("Successfully switched to branch '%s'.\n", branchName)
 		} else {
 			_, err := ui.SwitchBranches(repo)
 			HandleError("switching branches", err, true)
 		}
 
-		fmt.Printf("Successfully switched to branch '%s'.\n", branchName)
 	},
 }
 

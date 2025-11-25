@@ -148,6 +148,8 @@ func (m BranchSwitcherModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 
+				fmt.Printf("Successfully switched to branch '%s'.\n", branch)
+
 				return m, tea.Quit
 
 			case "/":
