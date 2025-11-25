@@ -481,10 +481,7 @@ func (m FilePickerModel) View() string {
 
 		// Calculate visible range
 		startIdx := m.scrollOffset
-		endIdx := startIdx + m.visibleLines
-		if endIdx > len(m.files) {
-			endIdx = len(m.files)
-		}
+		endIdx := min(startIdx+m.visibleLines, len(m.files))
 
 		// Show visible files
 		for i := startIdx; i < endIdx; i++ {
