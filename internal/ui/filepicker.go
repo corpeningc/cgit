@@ -140,6 +140,26 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	if m.mode == SearchMode {
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.String() {
+			case "esc":
+				m.mode = NormalMode
+				return m, nil
+			}
+		}
+		// Update search input if in search mode
+		oldValue := m.searchInput.Value()
+		m.searchInput, cmd = m.searchInput.Update(msg)
+		// Perform real-time search if input changed
+		if m.searchInput.Value() != oldValue {
+			m.searchQuery = m.searchInput.Value()
+			m.performSearch()
+		}
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -209,18 +229,9 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		if m.quitting {
-			return m, tea.Quit
-		}
-
-		switch msg.String() {
-		case "q", "ctrl+c":
-			if m.mode != SearchMode {
-				m.quitting = true
-				return m, tea.Quit
-			}
-		case "esc":
-			if m.mode == SearchMode {
+		if m.mode == SearchMode {
+			switch msg.String() {
+			case "esc":
 				m.mode = NormalMode
 				m.searchInput.SetValue("")
 				m.searchQuery = ""
@@ -228,89 +239,82 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.searchSelected = 0
 				return m, nil
 			}
-			m.quitting = true
-			return m, tea.Quit
+		} else if m.mode == DiffMode {
 
-		case "enter":
-			if m.mode == NormalMode && len(m.files) > 0 {
-				// Toggle selection
-				file := m.files[m.currentIndex]
-				m.selectedFiles[file] = !m.selectedFiles[file]
+		} else { // This is normal mode
+
+			if m.quitting {
+				return m, tea.Quit
 			}
 
-		case "c", "ctrl+enter":
-			if m.operationInProgress || len(m.getSelectedFiles()) == 0 {
-				return m, nil
-			}
+			switch msg.String() {
+			case "q", "ctrl+c", "esc":
+				m.quitting = true
+				return m, tea.Quit
 
-			if m.staged {
-				m.lastOperationStatus = "Cannot stage already staged files. Use 'r' to restore."
-				m.showStatusMessage = true
-				return m, tea.Batch(m.clearStatusAfterDelay())
-			}
+			case "enter":
+				if len(m.files) > 0 {
+					file := m.files[m.currentIndex]
+					m.selectedFiles[file] = !m.selectedFiles[file]
+				}
 
-			selectedFiles := m.getSelectedFiles()
-			m.operationInProgress = true
-			m.selectedFiles = make(map[string]bool)
+			case "c", "ctrl+enter":
+				if m.operationInProgress || len(m.getSelectedFiles()) == 0 {
+					return m, nil
+				}
 
-			return m, m.performGitOperation(selectedFiles, false)
+				if m.staged {
+					m.lastOperationStatus = "Cannot stage already staged files. Use 'r' to restore."
+					m.showStatusMessage = true
+					return m, tea.Batch(m.clearStatusAfterDelay())
+				}
 
-		case "r":
-			if m.operationInProgress || len(m.getSelectedFiles()) == 0 {
-				return m, nil
-			}
+				selectedFiles := m.getSelectedFiles()
+				m.operationInProgress = true
+				m.selectedFiles = make(map[string]bool)
 
-			selectedFiles := m.getSelectedFiles()
-			m.operationInProgress = true
-			m.selectedFiles = make(map[string]bool)
+				return m, m.performGitOperation(selectedFiles, false)
 
-			return m, m.performGitOperation(selectedFiles, true)
-		case "/":
-			if m.mode == NormalMode {
+			case "r":
+				if m.operationInProgress || len(m.getSelectedFiles()) == 0 {
+					return m, nil
+				}
+
+				selectedFiles := m.getSelectedFiles()
+				m.operationInProgress = true
+				m.selectedFiles = make(map[string]bool)
+
+				return m, m.performGitOperation(selectedFiles, true)
+			case "/":
 				m.mode = SearchMode
 				m.searchInput.Focus()
 				m.searchInput.SetValue("")
 				return m, nil
-			}
 
-		case "j", "down":
-			if m.mode != SearchMode {
+			case "j", "down":
 				if len(m.files) > 0 {
 					m.currentIndex = (m.currentIndex + 1) % len(m.files)
 					m.adjustScrolling()
 				}
-			}
 
-		case "k", "up":
-			if m.mode != SearchMode {
+			case "k", "up":
 				// Navigate up in file list with scrolling
 				if len(m.files) > 0 {
 					m.currentIndex = (m.currentIndex - 1 + len(m.files)) % len(m.files)
 					m.adjustScrolling()
 				}
-			}
 
-		case "g":
-			if m.mode == NormalMode {
+			case "g":
 				m.currentIndex = 0
 				m.scrollOffset = 0
-			}
 
-		case "G":
-			if m.mode == NormalMode && len(m.files) > 0 {
-				m.currentIndex = len(m.files) - 1
-				m.adjustScrolling()
-			}
-
-		case " ", "s":
-			if m.mode == SearchMode {
-				if len(m.filteredIndices) > 0 && m.searchSelected < len(m.filteredIndices) {
-					m.currentIndex = m.filteredIndices[m.searchSelected]
+			case "G":
+				if len(m.files) > 0 {
+					m.currentIndex = len(m.files) - 1
+					m.adjustScrolling()
 				}
-				m.mode = NormalMode
-				m.searchInput.SetValue("")
-				return m, nil
-			} else {
+
+			case " ":
 				if len(m.files) > 0 {
 					filePath := m.files[m.currentIndex]
 					m.diffViewer = NewDiffViewerModel(m.repo, filePath)
@@ -330,62 +334,46 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					return m, tea.Batch(cmds...)
 				}
-			}
 
-		case "a":
-			if m.mode == NormalMode {
+			case "a":
 				// Select all files
 				for _, file := range m.files {
 					m.selectedFiles[file] = true
 				}
-			}
 
-		case "tab":
-			if m.mode == NormalMode && !m.operationInProgress {
-				if m.staged {
-					m.stagedSelections = m.selectedFiles
-				} else {
-					m.unstagedSelections = m.selectedFiles
+			case "tab":
+				if !m.operationInProgress {
+					if m.staged {
+						m.stagedSelections = m.selectedFiles
+					} else {
+						m.unstagedSelections = m.selectedFiles
+					}
+
+					m.showStatusMessage = false
+
+					m.staged = !m.staged
+					if m.staged {
+						m.fileStatuses = m.stagedFileStatuses
+						m.selectedFiles = m.stagedSelections
+					} else {
+						m.fileStatuses = m.unstagedFileStatuses
+						m.selectedFiles = m.unstagedSelections
+					}
+
+					m.files = []string{}
+					for _, status := range m.fileStatuses {
+						m.files = append(m.files, status.Path)
+					}
+
+					m.currentIndex = 0
+					m.scrollOffset = 0
 				}
 
-				m.showStatusMessage = false
-
-				m.staged = !m.staged
-				if m.staged {
-					m.fileStatuses = m.stagedFileStatuses
-					m.selectedFiles = m.stagedSelections
-				} else {
-					m.fileStatuses = m.unstagedFileStatuses
-					m.selectedFiles = m.unstagedSelections
-				}
-
-				m.files = []string{}
-				for _, status := range m.fileStatuses {
-					m.files = append(m.files, status.Path)
-				}
-
-				m.currentIndex = 0
-				m.scrollOffset = 0
-			}
-
-		case "A":
-			if m.mode == NormalMode {
+			case "A":
 				// Deselect all files
 				m.selectedFiles = make(map[string]bool)
 			}
 		}
-	}
-
-	// Update search input if in search mode
-	if m.mode == SearchMode {
-		oldValue := m.searchInput.Value()
-		m.searchInput, cmd = m.searchInput.Update(msg)
-		// Perform real-time search if input changed
-		if m.searchInput.Value() != oldValue {
-			m.searchQuery = m.searchInput.Value()
-			m.performSearch()
-		}
-		return m, cmd
 	}
 
 	return m, cmd

@@ -206,6 +206,9 @@ var switchBranchCmd = &cobra.Command{
 		repo := git.New(".")
 		branchName := ""
 
+		remote, err := cmd.Flags().GetBool("remote")
+		HandleError("Getting remote flag", err, true)
+
 		if len(args) == 1 {
 			branchName = args[0]
 			// Check if working directory is clean
@@ -254,7 +257,7 @@ var switchBranchCmd = &cobra.Command{
 			HandleError("switching branches", err, true)
 			fmt.Printf("Successfully switched to branch '%s'.\n", branchName)
 		} else {
-			_, err := ui.SwitchBranches(repo)
+			_, err := ui.SwitchBranches(repo, remote)
 			HandleError("switching branches", err, true)
 		}
 
