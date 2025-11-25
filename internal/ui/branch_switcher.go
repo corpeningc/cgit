@@ -81,9 +81,9 @@ func NewBranchBranchSwitcherModel(repo *git.GitRepo) BranchSwitcherModel {
 		branches:    branches,
 		searchInput: searchInput,
 
-		titleStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("#F1D3AB")),
-		selectedStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("#F1D3AB")),
-		unselectedStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
+		titleStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("#F1D3AB")).Bold(true),
+		selectedStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("#F1D3AB")).Bold(true),
+		unselectedStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Bold(true),
 	}
 }
 
@@ -101,7 +101,7 @@ func (m BranchSwitcherModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.mode == SearchMode {
 		} else {
 			switch msg.String() {
-			case "q":
+			case "q", "esc":
 				return m, tea.Quit
 
 			case "j":
@@ -117,11 +117,26 @@ func (m BranchSwitcherModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			case "enter":
-				branch := m.branches[m.currentIndex]
-				err := m.repo.SwitchBranch(branch)
+				isClean, err := m.repo.IsClean()
 				if err != nil {
 					return m, nil
 				}
+
+				branch := m.branches[m.currentIndex]
+
+				if !isClean {
+					err = m.repo.Stash("Dirty working directory while switching to " + branch)
+
+					if err != nil {
+						return m, nil
+					}
+				}
+
+				err = m.repo.SwitchBranch(branch)
+				if err != nil {
+					return m, nil
+				}
+
 				return m, tea.Quit
 
 			case "/":
