@@ -132,9 +132,35 @@ func (m BranchSwitcherModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "esc":
 				m.mode = NormalMode
+				m.searchInput.SetValue("")
+				m.searchQuery = ""
+				m.filteredIndices = nil
+				allBranches, err := m.repo.GetAllBranches(m.remote)
+
+				if err != nil {
+					return m, nil
+				}
+
+				m.branches = allBranches
 				return m, nil
 			case "enter":
-				m.mode = SearchResultsMode
+				if len(m.filteredIndices) > 0 {
+					filteredBranches := make([]string, len(m.filteredIndices))
+					for i, idx := range m.filteredIndices {
+						filteredBranches[i] = m.branches[idx]
+					}
+					m.branches = filteredBranches
+				} else if m.searchQuery == "" {
+					allBranches, err := m.repo.GetAllBranches(m.remote)
+
+					if err != nil {
+						return m, nil
+					}
+
+					m.branches = allBranches
+				}
+				m.mode = NormalMode
+				m.currentIndex = 0
 				return m, nil
 			}
 		}
@@ -148,51 +174,6 @@ func (m BranchSwitcherModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.performSearch()
 		}
 		return m, cmd
-	}
-
-	// TODO: handle SearchResult mode
-	if m.mode == SearchResultsMode {
-		switch msg := msg.(type) {
-		case tea.KeyMsg:
-			switch msg.String() {
-			case "j":
-				if len(m.branches) > 0 {
-					m.currentIndex = (m.currentIndex + 1) % len(m.branches)
-					m.adjustScrolling()
-				}
-
-			case "k":
-				if len(m.branches) > 0 {
-					m.currentIndex = (m.currentIndex - 1 + len(m.branches)) % len(m.branches)
-					m.adjustScrolling()
-				}
-
-			case "enter":
-				isClean, err := m.repo.IsClean()
-				if err != nil {
-					return m, nil
-				}
-
-				branch := m.branches[m.currentIndex]
-
-				if !isClean {
-					err = m.repo.Stash("Dirty working directory while switching to " + branch)
-
-					if err != nil {
-						return m, nil
-					}
-				}
-
-				err = m.repo.SwitchBranch(branch)
-				if err != nil {
-					return m, nil
-				}
-
-				fmt.Printf("Successfully switched to branch '%s'.\n", branch)
-
-				return m, tea.Quit
-			}
-		}
 	}
 
 	switch msg := msg.(type) {
@@ -247,7 +228,7 @@ func (m BranchSwitcherModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "/":
 			m.mode = SearchMode
 			m.searchInput.Focus()
-			m.searchInput.SetValue("")
+			m.searchInput.SetValue(m.searchQuery)
 			return m, nil
 		}
 	}

@@ -24,6 +24,5 @@ type Mode int
 const (
 	NormalMode Mode = iota
 	SearchMode
-	SearchResultsMode
 	DiffMode
 )
