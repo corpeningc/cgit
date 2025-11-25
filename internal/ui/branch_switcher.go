@@ -59,6 +59,17 @@ func (m BranchSwitcherModel) View() string {
 		sections = append(sections, style.Render(line))
 	}
 
+	if m.mode == SearchMode {
+		searchTitle := m.titleStyle.Render("Search files:")
+		sections = append(sections, searchTitle)
+		sections = append(sections, m.searchInput.View())
+
+		if m.searchQuery != "" {
+		} else {
+			sections = append(sections, m.unselectedStyle.Render("Type to search..."))
+		}
+	}
+
 	return strings.Join(sections, "\n")
 }
 
