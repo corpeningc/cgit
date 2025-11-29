@@ -40,6 +40,37 @@ type ListComponent struct {
 	mode Mode
 }
 
+func (lc ListComponent) GetSerachQuery() string {
+	return lc.searchQuery
+}
+
+func (lc ListComponent) SetSearchQuery(query string) {
+	lc.searchQuery = query
+}
+
+func (lc ListComponent) FuzzyMatch(text, query string) bool {
+	if query == "" {
+		return true
+	}
+
+	textIdx := 0
+	for _, queryChar := range query {
+		found := false
+		for textIdx < len(text) {
+			if rune(text[textIdx]) == queryChar {
+				found = true
+				textIdx++
+				break
+			}
+			textIdx++
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 func (lc ListComponent) PerformSearch(ItemProvider ItemProvider) {
 	if lc.searchQuery == "" {
 		lc.filteredIndices = nil
@@ -53,11 +84,10 @@ func (lc ListComponent) PerformSearch(ItemProvider ItemProvider) {
 	items := ItemProvider.GetItems()
 
 	for i, item := range items {
-		if lc.fuzzyMatch(strings.ToLower(item), query) {
+		if lc.FuzzyMatch(strings.ToLower(item), query) {
 			lc.filteredIndices = append(lc.filteredIndices, i)
 		}
 	}
 
-	// Reset search selection to first result
 	lc.searchSelected = 0
 }
