@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -285,6 +286,22 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selectedFiles = make(map[string]bool)
 
 				return m, m.performGitOperation(selectedFiles, true)
+
+			case "p":
+				if m.operationInProgress || m.staged || len(m.files) == 0 {
+					return m, nil
+				}
+				filePath := m.files[m.currentIndex]
+				cmd := exec.Command("git", "add", "-p", filePath)
+				return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
+					return GitOperationCompleteMsg{
+						success:       err == nil,
+						error:         err,
+						operation:     "patch",
+						filesAffected: []string{filePath},
+					}
+				})
+
 			case "/":
 				m.mode = SearchMode
 				m.searchInput.Focus()
