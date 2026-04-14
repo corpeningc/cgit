@@ -34,6 +34,7 @@ type FilePickerModel struct {
 	searchQuery     string
 	filteredIndices []int
 	searchSelected  int
+	searchLocked    bool
 	quitting        bool
 	confirmed       bool
 	width           int
@@ -123,49 +124,20 @@ func (m FilePickerModel) Init() tea.Cmd {
 func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
-	// Handle diff mode separately
-	if m.mode == DiffMode {
-		switch msg := msg.(type) {
-		case tea.KeyMsg:
-			switch msg.String() {
-			case "esc", "q":
-				m.mode = NormalMode
-				return m, nil
-			}
-		}
-
-		updatedModel, cmd := m.diffViewer.Update(msg)
-		if diffModel, ok := updatedModel.(DiffViewerModel); ok {
-			m.diffViewer = diffModel
-		}
-		return m, cmd
-	}
-
-	if m.mode == SearchMode {
-		switch msg := msg.(type) {
-		case tea.KeyMsg:
-			switch msg.String() {
-			case "esc":
-				m.mode = NormalMode
-				return m, nil
-			}
-		}
-		// Update search input if in search mode
-		oldValue := m.searchInput.Value()
-		m.searchInput, cmd = m.searchInput.Update(msg)
-		// Perform real-time search if input changed
-		if m.searchInput.Value() != oldValue {
-			m.searchQuery = m.searchInput.Value()
-			m.performSearch()
-		}
-		return m, cmd
-	}
-
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.visibleLines = msg.Height - 6 // Account for title, help, etc.
+		m.visibleLines = msg.Height - 6
+
+	case diffLoadedMsg:
+		if m.mode == DiffMode {
+			updatedModel, cmd := m.diffViewer.Update(msg)
+			if diffModel, ok := updatedModel.(DiffViewerModel); ok {
+				m.diffViewer = diffModel
+			}
+			return m, cmd
+		}
 
 	case GitOperationCompleteMsg:
 		m.operationInProgress = false
@@ -178,18 +150,13 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					action = "discarded"
 				}
 			}
-
 			m.lastOperationStatus = fmt.Sprintf("✓ %s %d file(s)", action, len(msg.filesAffected))
 			m.showStatusMessage = true
-			return m, tea.Batch(
-				m.refreshRepositoryStatus(),
-				m.clearStatusAfterDelay(),
-			)
-		} else {
-			m.lastOperationStatus = fmt.Sprintf("✗ Error: %v", msg.error)
-			m.showStatusMessage = true
-			return m, m.clearStatusAfterDelay()
+			return m, tea.Batch(m.refreshRepositoryStatus(), m.clearStatusAfterDelay())
 		}
+		m.lastOperationStatus = fmt.Sprintf("✗ Error: %v", msg.error)
+		m.showStatusMessage = true
+		return m, m.clearStatusAfterDelay()
 
 	case StatusRefreshMsg:
 		if msg.error != nil {
@@ -197,10 +164,8 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showStatusMessage = true
 			return m, m.clearStatusAfterDelay()
 		}
-
 		m.stagedFileStatuses = msg.stagedFiles
 		m.unstagedFileStatuses = msg.unstagedFiles
-
 		if m.staged {
 			m.fileStatuses = m.stagedFileStatuses
 			m.selectedFiles = m.stagedSelections
@@ -208,12 +173,10 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.fileStatuses = m.unstagedFileStatuses
 			m.selectedFiles = m.unstagedSelections
 		}
-
 		m.files = []string{}
 		for _, status := range m.fileStatuses {
 			m.files = append(m.files, status.Path)
 		}
-
 		if m.currentIndex >= len(m.files) {
 			if len(m.files) > 0 {
 				m.currentIndex = len(m.files) - 1
@@ -222,7 +185,6 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.adjustScrolling()
-
 		return m, nil
 
 	case ClearStatusMsg:
@@ -230,61 +192,140 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		if m.mode == SearchMode {
-			switch msg.String() {
-			case "esc":
+		// Shared keys: behavior varies by mode
+		switch msg.String() {
+		case "esc":
+			switch m.mode {
+			case DiffMode:
 				m.mode = NormalMode
+			case SearchMode:
+				m.mode = NormalMode
+				m.searchInput.Blur()
 				m.searchInput.SetValue("")
 				m.searchQuery = ""
 				m.filteredIndices = nil
 				m.searchSelected = 0
-				return m, nil
-			}
-		} else if m.mode == DiffMode {
-
-		} else { // This is normal mode
-
-			if m.quitting {
-				return m, tea.Quit
-			}
-
-			switch msg.String() {
-			case "q", "ctrl+c", "esc":
+				m.searchLocked = false
+			case NormalMode:
 				m.quitting = true
 				return m, tea.Quit
+			}
+			return m, nil
 
-			case "enter":
+		case "q":
+			switch m.mode {
+			case DiffMode:
+				m.mode = NormalMode
+				return m, nil
+			case NormalMode:
+				m.quitting = true
+				return m, tea.Quit
+			}
+			// SearchMode: fall through to text input
+
+		case "enter":
+			switch m.mode {
+			case SearchMode:
+				if !m.searchLocked && len(m.filteredIndices) > 0 {
+					m.searchLocked = true
+					m.searchInput.Blur()
+				} else if m.searchLocked && len(m.filteredIndices) > 0 {
+					file := m.files[m.filteredIndices[m.searchSelected]]
+					m.selectedFiles[file] = !m.selectedFiles[file]
+				}
+				return m, nil
+			case NormalMode:
 				if len(m.files) > 0 {
 					file := m.files[m.currentIndex]
 					m.selectedFiles[file] = !m.selectedFiles[file]
 				}
+				return m, nil
+			}
+
+		case "j", "down":
+			switch m.mode {
+			case SearchMode:
+				if m.searchLocked && len(m.filteredIndices) > 0 {
+					m.searchSelected = (m.searchSelected + 1) % len(m.filteredIndices)
+					return m, nil
+				}
+				// Unlocked: fall through to text input
+			case NormalMode:
+				if len(m.files) > 0 {
+					m.currentIndex = (m.currentIndex + 1) % len(m.files)
+					m.adjustScrolling()
+				}
+				return m, nil
+			}
+
+		case "k", "up":
+			switch m.mode {
+			case SearchMode:
+				if m.searchLocked && len(m.filteredIndices) > 0 {
+					m.searchSelected = (m.searchSelected - 1 + len(m.filteredIndices)) % len(m.filteredIndices)
+					return m, nil
+				}
+				// Unlocked: fall through to text input
+			case NormalMode:
+				if len(m.files) > 0 {
+					m.currentIndex = (m.currentIndex - 1 + len(m.files)) % len(m.files)
+					m.adjustScrolling()
+				}
+				return m, nil
+			}
+		}
+
+		// DiffMode: forward remaining keys to the diff viewer
+		if m.mode == DiffMode {
+			updatedModel, cmd := m.diffViewer.Update(msg)
+			if diffModel, ok := updatedModel.(DiffViewerModel); ok {
+				m.diffViewer = diffModel
+			}
+			return m, cmd
+		}
+
+		// SearchMode unlocked: forward remaining keys to the text input
+		if m.mode == SearchMode && !m.searchLocked {
+			oldValue := m.searchInput.Value()
+			m.searchInput, cmd = m.searchInput.Update(msg)
+			if m.searchInput.Value() != oldValue {
+				m.searchQuery = m.searchInput.Value()
+				m.performSearch()
+			}
+			return m, cmd
+		}
+
+		// NormalMode-only keys
+		if m.mode == NormalMode {
+			if m.quitting {
+				return m, tea.Quit
+			}
+			switch msg.String() {
+			case "ctrl+c":
+				m.quitting = true
+				return m, tea.Quit
 
 			case "c", "ctrl+enter":
 				if m.operationInProgress || len(m.getSelectedFiles()) == 0 {
 					return m, nil
 				}
-
 				if m.staged {
 					m.lastOperationStatus = "Cannot stage already staged files. Use 'r' to restore."
 					m.showStatusMessage = true
 					return m, tea.Batch(m.clearStatusAfterDelay())
 				}
-
 				selectedFiles := m.getSelectedFiles()
 				m.operationInProgress = true
 				m.selectedFiles = make(map[string]bool)
-
 				return m, m.performGitOperation(selectedFiles, false)
 
 			case "r":
 				if m.operationInProgress || len(m.getSelectedFiles()) == 0 {
 					return m, nil
 				}
-
 				selectedFiles := m.getSelectedFiles()
 				m.operationInProgress = true
 				m.selectedFiles = make(map[string]bool)
-
 				return m, m.performGitOperation(selectedFiles, true)
 
 			case "p":
@@ -307,19 +348,6 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.searchInput.Focus()
 				m.searchInput.SetValue("")
 				return m, nil
-
-			case "j", "down":
-				if len(m.files) > 0 {
-					m.currentIndex = (m.currentIndex + 1) % len(m.files)
-					m.adjustScrolling()
-				}
-
-			case "k", "up":
-				// Navigate up in file list with scrolling
-				if len(m.files) > 0 {
-					m.currentIndex = (m.currentIndex - 1 + len(m.files)) % len(m.files)
-					m.adjustScrolling()
-				}
 
 			case "g":
 				m.currentIndex = 0
@@ -353,10 +381,12 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			case "a":
-				// Select all files
 				for _, file := range m.files {
 					m.selectedFiles[file] = true
 				}
+
+			case "A":
+				m.selectedFiles = make(map[string]bool)
 
 			case "tab":
 				if !m.operationInProgress {
@@ -365,9 +395,7 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					} else {
 						m.unstagedSelections = m.selectedFiles
 					}
-
 					m.showStatusMessage = false
-
 					m.staged = !m.staged
 					if m.staged {
 						m.fileStatuses = m.stagedFileStatuses
@@ -376,19 +404,13 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.fileStatuses = m.unstagedFileStatuses
 						m.selectedFiles = m.unstagedSelections
 					}
-
 					m.files = []string{}
 					for _, status := range m.fileStatuses {
 						m.files = append(m.files, status.Path)
 					}
-
 					m.currentIndex = 0
 					m.scrollOffset = 0
 				}
-
-			case "A":
-				// Deselect all files
-				m.selectedFiles = make(map[string]bool)
 			}
 		}
 	}
@@ -431,10 +453,15 @@ func (m FilePickerModel) View() string {
 	}
 
 	if m.mode == SearchMode {
-		// Show search input
-		searchTitle := m.searchStyle.Render("Search files:")
-		sections = append(sections, searchTitle)
-		sections = append(sections, m.searchInput.View())
+		// Show search input or locked header
+		if m.searchLocked {
+			lockedTitle := m.searchStyle.Render(fmt.Sprintf("Results for \"%s\":", m.searchQuery))
+			sections = append(sections, lockedTitle)
+		} else {
+			searchTitle := m.searchStyle.Render("Search files:")
+			sections = append(sections, searchTitle)
+			sections = append(sections, m.searchInput.View())
+		}
 
 		// Show search results
 		if m.searchQuery != "" {
@@ -524,8 +551,10 @@ func (m FilePickerModel) View() string {
 
 	// Help
 	help := ""
-	if m.mode == SearchMode {
-		help = "space: diff | enter: select | esc: back "
+	if m.mode == SearchMode && m.searchLocked {
+		help = "j/k: navigate | enter: select | esc: exit search"
+	} else if m.mode == SearchMode {
+		help = "enter: lock results | esc: back"
 	} else if !m.staged {
 		help = "Tab: toggle /: search | space: diff | enter: select | c: stage | r: remove | a: select all | A: deselect all | q: quit"
 	} else {
