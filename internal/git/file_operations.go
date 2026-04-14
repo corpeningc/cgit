@@ -3,7 +3,10 @@ package git
 import (
 	"bufio"
 	"bytes"
+	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -152,11 +155,27 @@ func (repo *GitRepo) FileDiff(filePath string, staged bool) (string, error) {
 			return "File was deleted:\n--- " + filePath + "\n+++ /dev/null\n\n(This file was deleted from the repository)", nil
 		}
 		if strings.HasPrefix(status, "??") {
-			return "New untracked file:\n--- /dev/null\n+++ " + filePath + "\n\n(This is a new file, use 'git add' to track it)", nil
+			return repo.readFileAsDiff(filePath)
 		}
 	}
 
 	return "No differences to show for this file.\n\nThis might be because:\n- The file is unmodified\n- The file was renamed\n- The file is not tracked by git", nil
+}
+
+func (repo *GitRepo) readFileAsDiff(filePath string) (string, error) {
+	fullPath := filepath.Join(repo.WorkDir, filePath)
+	content, err := os.ReadFile(fullPath)
+	if err != nil {
+		return "", fmt.Errorf("reading file: %w", err)
+	}
+
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "--- /dev/null\n+++ b/%s\n@@ -0,0 +1,%d @@\n", filePath, strings.Count(string(content), "\n"))
+	for _, line := range strings.Split(string(content), "\n") {
+		// Don't add a "+" line for the trailing empty string after the final newline
+		fmt.Fprintf(&sb, "+%s\n", line)
+	}
+	return sb.String(), nil
 }
 
 func (r *GitRepo) RemoveFiles(files []string, staged bool) error {
@@ -164,20 +183,43 @@ func (r *GitRepo) RemoveFiles(files []string, staged bool) error {
 		return nil
 	}
 
-	args := []string{"restore"}
-
-	if !staged {
-		args = append(args, files...)
-	} else {
-		args = append(args, "--staged")
-		args = append(args, files...)
+	var toRestore []string
+	for _, f := range files {
+		if r.isUntracked(f) {
+			if err := os.Remove(filepath.Join(r.WorkDir, f)); err != nil {
+				return fmt.Errorf("deleting untracked file %s: %w", f, err)
+			}
+		} else {
+			toRestore = append(toRestore, f)
+		}
 	}
 
+	if len(toRestore) == 0 {
+		return nil
+	}
+
+	args := []string{"restore"}
+	if staged {
+		args = append(args, "--staged")
+	}
+	args = append(args, toRestore...)
+
 	cmd := exec.Command("git", args...)
+	cmd.Dir = r.WorkDir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	err := cmd.Run()
 	return formatCommandError("restore files", err, stdout, stderr)
+}
+
+func (r *GitRepo) isUntracked(filePath string) bool {
+	cmd := exec.Command("git", "status", "--porcelain", filePath)
+	cmd.Dir = r.WorkDir
+	out, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	return strings.HasPrefix(strings.TrimSpace(string(out)), "??")
 }
