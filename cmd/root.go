@@ -59,6 +59,9 @@ func init() {
 	rootCmd.AddCommand(mergeCommand)
 	rootCmd.AddCommand(commitAndPushCmd)
 	rootCmd.AddCommand(commitCmd)
+
+	pushCmd.Flags().BoolP("force-with-lease", "f", false, "Force push with lease (safer force push)")
+	pushCmd.Flags().BoolP("set-upstream", "u", false, "Set upstream tracking for current branch")
 	rootCmd.AddCommand(pushCmd)
 	rootCmd.AddCommand(newBranchCmd)
 
@@ -77,6 +80,7 @@ func init() {
 	rootCmd.AddCommand(featureCmd)
 
 	rootCmd.AddCommand(statusCommand)
+	rootCmd.AddCommand(logCmd)
 }
 
 var manageCmd = &cobra.Command{
@@ -139,9 +143,16 @@ var commitAndPushCmd = &cobra.Command{
 
 var commitCmd = &cobra.Command{
 	Use:   "commit",
+	Args:  cobra.RangeArgs(0, 1),
 	Short: "Commit staged changes with a message",
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
+
+		if len(args) == 0 {
+			err := ui.StartCommitInput(repo)
+			HandleError("committing changes", err, true)
+			return
+		}
 
 		commitMsg := args[0]
 		err := repo.Commit(commitMsg)
@@ -157,7 +168,13 @@ var pushCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
 
-		err := repo.Push()
+		force, _ := cmd.Flags().GetBool("force-with-lease")
+		upstream, _ := cmd.Flags().GetBool("set-upstream")
+
+		err := repo.PushWithOptions(git.PushOptions{
+			ForceWithLease: force,
+			SetUpstream:    upstream,
+		})
 		HandleError("pushing changes", err, true)
 
 		fmt.Println("Successfully pushed changes.")
@@ -266,14 +283,12 @@ var switchBranchCmd = &cobra.Command{
 
 var popCmd = &cobra.Command{
 	Use:   "pop",
-	Short: "Pop the most recent stash",
+	Short: "Interactively select and pop a stash",
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
 
-		err := repo.StashPop()
+		err := ui.StartStashPicker(repo)
 		HandleError("popping stash", err, true)
-
-		fmt.Println("Successfully popped stash.")
 	},
 }
 
@@ -385,6 +400,20 @@ var featureCmd = &cobra.Command{
 			HandleError("pushing changes", err, true)
 			fmt.Println("Successfully pushed changes.")
 		}
+	},
+}
+
+var logCmd = &cobra.Command{
+	Use:     "log",
+	Aliases: []string{"l"},
+	Short:   "Browse commit history in an interactive viewer",
+	Run: func(cmd *cobra.Command, args []string) {
+		repo := git.New(".")
+		content, err := repo.GetLog(100)
+		HandleError("getting git log", err, true)
+
+		err = ui.StartLogViewer(content)
+		HandleError("showing log viewer", err, true)
 	},
 }
 

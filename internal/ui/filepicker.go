@@ -295,15 +295,18 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-		// NormalMode-only keys
-		if m.mode == NormalMode {
-			if m.quitting {
+		// NormalMode and locked SearchMode share file action keys
+		inLockedSearch := m.mode == SearchMode && m.searchLocked
+		if m.mode == NormalMode || inLockedSearch {
+			if m.mode == NormalMode && m.quitting {
 				return m, tea.Quit
 			}
 			switch msg.String() {
 			case "ctrl+c":
-				m.quitting = true
-				return m, tea.Quit
+				if m.mode == NormalMode {
+					m.quitting = true
+					return m, tea.Quit
+				}
 
 			case "c", "ctrl+enter":
 				if m.operationInProgress || len(m.getSelectedFiles()) == 0 {
@@ -332,7 +335,7 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.operationInProgress || m.staged || len(m.files) == 0 {
 					return m, nil
 				}
-				filePath := m.files[m.currentIndex]
+				filePath := m.files[m.currentFileIdx()]
 				cmd := exec.Command("git", "add", "-p", filePath)
 				return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
 					return GitOperationCompleteMsg{
@@ -344,24 +347,32 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				})
 
 			case "/":
-				m.mode = SearchMode
-				m.searchInput.Focus()
-				m.searchInput.SetValue("")
+				if m.mode == NormalMode {
+					m.mode = SearchMode
+					m.searchInput.Focus()
+					m.searchInput.SetValue("")
+				} else if inLockedSearch {
+					// Unlock search so the query can be edited
+					m.searchLocked = false
+					m.searchInput.Focus()
+				}
 				return m, nil
 
 			case "g":
-				m.currentIndex = 0
-				m.scrollOffset = 0
+				if m.mode == NormalMode {
+					m.currentIndex = 0
+					m.scrollOffset = 0
+				}
 
 			case "G":
-				if len(m.files) > 0 {
+				if m.mode == NormalMode && len(m.files) > 0 {
 					m.currentIndex = len(m.files) - 1
 					m.adjustScrolling()
 				}
 
 			case " ":
 				if len(m.files) > 0 {
-					filePath := m.files[m.currentIndex]
+					filePath := m.files[m.currentFileIdx()]
 					m.diffViewer = NewDiffViewerModel(m.repo, filePath)
 					m.diffViewer.staged = m.staged
 					m.mode = DiffMode
@@ -381,15 +392,21 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			case "a":
-				for _, file := range m.files {
-					m.selectedFiles[file] = true
+				if inLockedSearch {
+					for _, idx := range m.filteredIndices {
+						m.selectedFiles[m.files[idx]] = true
+					}
+				} else {
+					for _, file := range m.files {
+						m.selectedFiles[file] = true
+					}
 				}
 
 			case "A":
 				m.selectedFiles = make(map[string]bool)
 
 			case "tab":
-				if !m.operationInProgress {
+				if m.mode == NormalMode && !m.operationInProgress {
 					if m.staged {
 						m.stagedSelections = m.selectedFiles
 					} else {
@@ -552,7 +569,7 @@ func (m FilePickerModel) View() string {
 	// Help
 	help := ""
 	if m.mode == SearchMode && m.searchLocked {
-		help = "j/k: navigate | enter: select | esc: exit search"
+		help = "j/k: navigate | enter: select | c: stage | r: restore | space: diff | a: select all | A: deselect all | esc: exit search"
 	} else if m.mode == SearchMode {
 		help = "enter: lock results | esc: back"
 	} else if !m.staged {
@@ -565,6 +582,15 @@ func (m FilePickerModel) View() string {
 	sections = append(sections, m.helpStyle.Render(help))
 
 	return strings.Join(sections, "\n")
+}
+
+// currentFileIdx returns the index into m.files for the currently highlighted item,
+// accounting for locked search mode (uses filteredIndices) vs normal mode (uses cursor).
+func (m FilePickerModel) currentFileIdx() int {
+	if m.mode == SearchMode && m.searchLocked && len(m.filteredIndices) > 0 {
+		return m.filteredIndices[m.searchSelected]
+	}
+	return m.currentIndex
 }
 
 func (m *FilePickerModel) adjustScrolling() {

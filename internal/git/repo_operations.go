@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 type RepoStatus struct {
@@ -65,7 +66,16 @@ func (repo *GitRepo) Commit(message string) error {
 	return formatCommandError("commit", err, stdout, stderr)
 }
 
+type PushOptions struct {
+	ForceWithLease bool
+	SetUpstream    bool
+}
+
 func (repo *GitRepo) Push() error {
+	return repo.PushWithOptions(PushOptions{})
+}
+
+func (repo *GitRepo) PushWithOptions(opts PushOptions) error {
 	currentBranch, err := repo.GetCurrentBranch()
 	if err != nil {
 		return err
@@ -76,12 +86,19 @@ func (repo *GitRepo) Push() error {
 	statusCmd.Dir = repo.WorkDir
 
 	err = statusCmd.Run()
-
 	if err != nil {
 		return err
 	}
 
-	pushCmd := exec.Command("git", "push", "origin", currentBranch)
+	args := []string{"push", "origin", currentBranch}
+	if opts.ForceWithLease {
+		args = append(args, "--force-with-lease")
+	}
+	if opts.SetUpstream {
+		args = append(args, "--set-upstream")
+	}
+
+	pushCmd := exec.Command("git", args...)
 	pushCmd.Env = os.Environ()
 	pushCmd.Dir = repo.WorkDir
 
@@ -146,6 +163,50 @@ func (repo *GitRepo) Stash(message string) error {
 	return formatCommandError("stash changes", err, stdout, stderr)
 }
 
+type StashEntry struct {
+	Ref         string
+	Description string
+}
+
+func (repo *GitRepo) StashList() ([]StashEntry, error) {
+	cmd := exec.Command("git", "stash", "list", "--format=%gd|%s")
+	cmd.Dir = repo.WorkDir
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		return nil, formatCommandError("list stashes", err, stdout, stderr)
+	}
+
+	var entries []StashEntry
+	for _, line := range strings.Split(strings.TrimSpace(stdout.String()), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "|", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		entries = append(entries, StashEntry{Ref: parts[0], Description: parts[1]})
+	}
+	return entries, nil
+}
+
+func (repo *GitRepo) StashPopRef(ref string) error {
+	cmd := exec.Command("git", "stash", "pop", ref)
+	cmd.Dir = repo.WorkDir
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	return formatCommandError("pop stash", err, stdout, stderr)
+}
+
 func (repo *GitRepo) StashPop() error {
 	cmd := exec.Command("git", "stash", "pop")
 	cmd.Dir = repo.WorkDir
@@ -156,6 +217,22 @@ func (repo *GitRepo) StashPop() error {
 
 	err := cmd.Run()
 	return formatCommandError("pop stash", err, stdout, stderr)
+}
+
+func (repo *GitRepo) GetLog(limit int) (string, error) {
+	args := []string{"log", "--oneline", "--graph", "--decorate", fmt.Sprintf("-n%d", limit)}
+	cmd := exec.Command("git", args...)
+	cmd.Dir = repo.WorkDir
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		return "", formatCommandError("get log", err, stdout, stderr)
+	}
+	return stdout.String(), nil
 }
 
 func (repo *GitRepo) FullClean() error {
