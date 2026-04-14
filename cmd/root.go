@@ -81,6 +81,11 @@ func init() {
 
 	rootCmd.AddCommand(statusCommand)
 	rootCmd.AddCommand(logCmd)
+
+	amendCmd.Flags().BoolP("no-edit", "n", false, "Amend staged changes without changing the commit message")
+	rootCmd.AddCommand(amendCmd)
+
+	rootCmd.AddCommand(conflictsCmd)
 }
 
 var manageCmd = &cobra.Command{
@@ -406,6 +411,36 @@ var featureCmd = &cobra.Command{
 	},
 }
 
+var conflictsCmd = &cobra.Command{
+	Use:     "conflicts",
+	Aliases: []string{"cf"},
+	Short:   "Resolve merge conflicts interactively",
+	Run: func(cmd *cobra.Command, args []string) {
+		repo := git.New(".")
+		err := ui.StartConflictsPicker(repo)
+		HandleError("resolving conflicts", err, true)
+	},
+}
+
+var amendCmd = &cobra.Command{
+	Use:   "amend",
+	Short: "Amend the last commit",
+	Run: func(cmd *cobra.Command, args []string) {
+		repo := git.New(".")
+
+		noEdit, _ := cmd.Flags().GetBool("no-edit")
+		if noEdit {
+			err := repo.AmendCommit("", true)
+			HandleError("amending commit", err, true)
+			fmt.Println("Successfully amended commit.")
+			return
+		}
+
+		err := ui.StartAmendInput(repo)
+		HandleError("amending commit", err, true)
+	},
+}
+
 var logCmd = &cobra.Command{
 	Use:     "log",
 	Aliases: []string{"l"},
@@ -415,7 +450,7 @@ var logCmd = &cobra.Command{
 		content, err := repo.GetLog(100)
 		HandleError("getting git log", err, true)
 
-		err = ui.StartLogViewer(content)
+		err = ui.StartLogViewer(repo, content)
 		HandleError("showing log viewer", err, true)
 	},
 }

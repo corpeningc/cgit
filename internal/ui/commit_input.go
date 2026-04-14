@@ -13,6 +13,7 @@ type CommitInputModel struct {
 	repo      *git.GitRepo
 	textInput textinput.Model
 	committed bool
+	amend     bool
 	err       error
 
 	// Styles
@@ -101,8 +102,13 @@ func (m CommitInputModel) View() string {
 	var sections []string
 
 	// Title
-	title := m.titleStyle.Render("Commit Changes")
-	sections = append(sections, title)
+	titleText := "Commit Changes"
+	helpText := "enter: commit | esc: cancel"
+	if m.amend {
+		titleText = "Amend Last Commit"
+		helpText = "enter: amend | esc: cancel"
+	}
+	sections = append(sections, m.titleStyle.Render(titleText))
 	sections = append(sections, "")
 
 	// Input
@@ -110,7 +116,7 @@ func (m CommitInputModel) View() string {
 	sections = append(sections, "")
 
 	// Help
-	help := m.helpStyle.Render("enter: commit | esc: cancel")
+	help := m.helpStyle.Render(helpText)
 	sections = append(sections, help)
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
@@ -118,7 +124,12 @@ func (m CommitInputModel) View() string {
 
 func (m CommitInputModel) commitWithMessage(message string) tea.Cmd {
 	return func() tea.Msg {
-		err := m.repo.Commit(message)
+		var err error
+		if m.amend {
+			err = m.repo.AmendCommit(message, false)
+		} else {
+			err = m.repo.Commit(message)
+		}
 		return commitCompleteMsg{
 			success: err == nil,
 			error:   err,
@@ -134,7 +145,30 @@ func StartCommitInput(repo *git.GitRepo) error {
 		return err
 	}
 
-	// Check if commit was successful
+	if finalModel, ok := model.(CommitInputModel); ok {
+		return finalModel.err
+	}
+
+	return nil
+}
+
+func StartAmendInput(repo *git.GitRepo) error {
+	lastMsg, err := repo.GetLastCommitMessage()
+	if err != nil {
+		return err
+	}
+
+	m := NewCommitInputModel(repo)
+	m.textInput.SetValue(lastMsg)
+	m.textInput.CursorEnd()
+	m.amend = true
+
+	p := tea.NewProgram(m)
+	model, err := p.Run()
+	if err != nil {
+		return err
+	}
+
 	if finalModel, ok := model.(CommitInputModel); ok {
 		return finalModel.err
 	}

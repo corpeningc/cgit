@@ -25,4 +25,5 @@ const (
 	NormalMode Mode = iota
 	SearchMode
 	DiffMode
+	DetailMode
 )

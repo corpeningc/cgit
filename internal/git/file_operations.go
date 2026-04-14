@@ -111,9 +111,9 @@ func (repo *GitRepo) FileDiff(filePath string, staged bool) (string, error) {
 	// First try normal diff for modified files
 	var cmd *exec.Cmd
 	if staged {
-		cmd = exec.Command("git", "diff", "--staged", "--color=always", filePath)
+		cmd = exec.Command("git", "diff", "--staged", "--word-diff=color", filePath)
 	} else {
-		cmd = exec.Command("git", "diff", "--color=always", filePath)
+		cmd = exec.Command("git", "diff", "--word-diff=color", filePath)
 	}
 	cmd.Dir = repo.WorkDir
 
@@ -160,6 +160,69 @@ func (repo *GitRepo) FileDiff(filePath string, staged bool) (string, error) {
 	}
 
 	return "No differences to show for this file.\n\nThis might be because:\n- The file is unmodified\n- The file was renamed\n- The file is not tracked by git", nil
+}
+
+var conflictStatuses = map[string]bool{
+	"UU": true, "AA": true, "DD": true,
+	"AU": true, "UA": true, "DU": true, "UD": true,
+}
+
+func (repo *GitRepo) GetConflictedFiles() ([]FileStatus, error) {
+	cmd := exec.Command("git", "status", "--porcelain=v1")
+	cmd.Dir = repo.WorkDir
+
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var conflicts []FileStatus
+	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if len(line) < 3 {
+			continue
+		}
+		code := string(line[0]) + string(line[1])
+		if !conflictStatuses[code] {
+			continue
+		}
+		filePath := strings.TrimSpace(line[3:])
+		conflicts = append(conflicts, FileStatus{Path: filePath, Status: code})
+	}
+	return conflicts, nil
+}
+
+func (repo *GitRepo) ResolveConflictOurs(filePath string) error {
+	cmd := exec.Command("git", "checkout", "--ours", filePath)
+	cmd.Dir = repo.WorkDir
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return formatCommandError("checkout --ours", err, stdout, stderr)
+	}
+	addCmd := exec.Command("git", "add", filePath)
+	addCmd.Dir = repo.WorkDir
+	addCmd.Stdout = &stdout
+	addCmd.Stderr = &stderr
+	return formatCommandError("add after ours", addCmd.Run(), stdout, stderr)
+}
+
+func (repo *GitRepo) ResolveConflictTheirs(filePath string) error {
+	cmd := exec.Command("git", "checkout", "--theirs", filePath)
+	cmd.Dir = repo.WorkDir
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return formatCommandError("checkout --theirs", err, stdout, stderr)
+	}
+	addCmd := exec.Command("git", "add", filePath)
+	addCmd.Dir = repo.WorkDir
+	addCmd.Stdout = &stdout
+	addCmd.Stderr = &stderr
+	return formatCommandError("add after theirs", addCmd.Run(), stdout, stderr)
 }
 
 func (repo *GitRepo) readFileAsDiff(filePath string) (string, error) {

@@ -219,6 +219,56 @@ func (repo *GitRepo) StashPop() error {
 	return formatCommandError("pop stash", err, stdout, stderr)
 }
 
+func (repo *GitRepo) GetLastCommitMessage() (string, error) {
+	cmd := exec.Command("git", "log", "-1", "--format=%s")
+	cmd.Dir = repo.WorkDir
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		return "", formatCommandError("get last commit message", err, stdout, stderr)
+	}
+	return strings.TrimSpace(stdout.String()), nil
+}
+
+func (repo *GitRepo) AmendCommit(message string, noEdit bool) error {
+	var args []string
+	if noEdit {
+		args = []string{"commit", "--amend", "--no-edit"}
+	} else {
+		args = []string{"commit", "--amend", "-m", message}
+	}
+
+	cmd := exec.Command("git", args...)
+	cmd.Env = os.Environ()
+	cmd.Dir = repo.WorkDir
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	return formatCommandError("amend commit", err, stdout, stderr)
+}
+
+func (repo *GitRepo) ShowCommit(hash string) (string, error) {
+	cmd := exec.Command("git", "show", "--word-diff=color", hash)
+	cmd.Dir = repo.WorkDir
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		return "", formatCommandError("show commit", err, stdout, stderr)
+	}
+	return stdout.String(), nil
+}
+
 func (repo *GitRepo) GetLog(limit int) (string, error) {
 	args := []string{"log", "--oneline", "--graph", "--decorate", fmt.Sprintf("-n%d", limit)}
 	cmd := exec.Command("git", args...)
