@@ -21,11 +21,6 @@ type conflictRefreshMsg struct {
 	err   error
 }
 
-type conflictContentMsg struct {
-	content string
-	err     error
-}
-
 type ConflictsPickerModel struct {
 	repo         *git.GitRepo
 	files        []git.FileStatus
@@ -215,9 +210,6 @@ func (m ConflictsPickerModel) View() string {
 		}
 		left = append(left, style.Render(fmt.Sprintf("%s[%s] %s", prefix, f.Status, f.Path)))
 	}
-
-	left = append(left, "")
-	left = append(left, m.helpStyle.Render("j/k: navigate | o: ours | t: theirs | e: $EDITOR | ^j/^k: scroll diff | ^d/^u: half page | q: quit"))
 
 	leftPanel := lipgloss.NewStyle().Width(leftWidth).Render(strings.Join(left, "\n"))
 	separator := m.separatorStyle.Render(strings.Repeat("│\n", m.height))

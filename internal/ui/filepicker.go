@@ -48,8 +48,9 @@ type FilePickerModel struct {
 	scrollOffset int
 	visibleLines int
 
-	// Diff viewer (always visible on the right)
+	// Diff viewer (visible on the right in split-pane mode)
 	diffViewer DiffViewerModel
+	splitPane  bool
 
 	// Styles
 	titleStyle      lipgloss.Style
@@ -119,7 +120,8 @@ func NewFilePicker(repo *git.GitRepo, stagedFileStatuses []git.FileStatus, unsta
 			Foreground(lipgloss.Color("240")),
 	}
 
-	// Init diff viewer for the first file
+	m.splitPane = true
+
 	if len(files) > 0 {
 		m.diffViewer = NewDiffViewerModel(repo, files[0])
 		m.diffViewer.staged = startInStaged
@@ -151,8 +153,7 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			diffMsg = tea.WindowSizeMsg{Width: msg.Width, Height: msg.Height}
 		} else {
 			leftWidth := msg.Width / 2
-			rightWidth := msg.Width - leftWidth - 1
-			diffMsg = tea.WindowSizeMsg{Width: rightWidth, Height: msg.Height}
+			diffMsg = tea.WindowSizeMsg{Width: msg.Width - leftWidth - 1, Height: msg.Height}
 		}
 		updatedDiff, diffCmd := m.diffViewer.Update(diffMsg)
 		if dv, ok := updatedDiff.(DiffViewerModel); ok {
@@ -465,6 +466,9 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "A":
 				m.selectedFiles = make(map[string]bool)
 
+			case "s":
+				m.splitPane = !m.splitPane
+
 			case "tab":
 				if m.mode == NormalMode && !m.operationInProgress {
 					if m.staged {
@@ -633,29 +637,13 @@ func (m FilePickerModel) View() string {
 		}
 	}
 
-	// Help
-	var help string
-	if m.mode == SearchMode && m.searchLocked {
-		help = "j/k: navigate | enter: select | c: stage | r: restore | a: select all | A: deselect all | /: edit query | esc: exit search"
-	} else if m.mode == SearchMode {
-		help = "enter: lock results | esc: back"
-	} else if !m.staged {
-		help = "Tab: toggle | /: search | enter: select | c: stage | r: remove | p: patch | space: fullscreen diff | ^j/^k: scroll diff | ^d/^u: half page | a: all | A: none | q: quit"
-	} else {
-		help = "Tab: toggle | /: search | enter: select | r: restore | space: fullscreen diff | ^j/^k: scroll diff | ^d/^u: half page | a: all | A: none | q: quit"
+	if m.splitPane {
+		leftPanel := lipgloss.NewStyle().Width(leftWidth).Render(strings.Join(leftSections, "\n"))
+		separator := m.separatorStyle.Render(strings.Repeat("│\n", m.height))
+		return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, separator, m.diffViewer.View())
 	}
-	leftSections = append(leftSections, "")
-	leftSections = append(leftSections, m.helpStyle.Render(help))
 
-	leftPanel := lipgloss.NewStyle().Width(leftWidth).Render(strings.Join(leftSections, "\n"))
-
-	// ── Separator ─────────────────────────────────────────────────────────
-	separator := m.separatorStyle.Render(strings.Repeat("│\n", m.height))
-
-	// ── Right panel: diff preview ──────────────────────────────────────────
-	rightPanel := m.diffViewer.View()
-
-	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, separator, rightPanel)
+	return lipgloss.NewStyle().Width(m.width).Render(strings.Join(leftSections, "\n"))
 }
 
 func (m *FilePickerModel) adjustScrolling() {

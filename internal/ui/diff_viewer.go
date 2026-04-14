@@ -24,7 +24,6 @@ type DiffViewerModel struct {
 	contextStyle lipgloss.Style
 	headerStyle  lipgloss.Style
 	errorStyle   lipgloss.Style
-	helpStyle    lipgloss.Style
 }
 
 type diffLoadedMsg struct {
@@ -59,8 +58,6 @@ func NewDiffViewerModel(repo *git.GitRepo, filePath string) DiffViewerModel {
 		errorStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("196")),
 
-		helpStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("245")),
 	}
 }
 
@@ -73,9 +70,9 @@ func (m DiffViewerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		headerHeight := 4 // Title + help + borders
+		headerHeight := 1 // title line only
 		if !m.ready {
-			m.viewport = viewport.New(msg.Width-2, msg.Height-headerHeight)
+			m.viewport = viewport.New(msg.Width, msg.Height-headerHeight)
 			m.viewport.Style = lipgloss.NewStyle()
 			m.ready = true
 		} else {
@@ -132,32 +129,17 @@ func (m DiffViewerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m DiffViewerModel) View() string {
 	if m.err != nil {
-		var sections []string
 		title := m.titleStyle.Render("Diff Viewer - " + m.filePath)
-		sections = append(sections, title)
-		sections = append(sections, "")
-		sections = append(sections, m.errorStyle.Render("Error loading diff: "+m.err.Error()))
-		sections = append(sections, "")
-		help := m.helpStyle.Render("esc: back")
-		sections = append(sections, help)
-		return lipgloss.JoinVertical(lipgloss.Left, sections...)
+		errMsg := m.errorStyle.Render("Error loading diff: " + m.err.Error())
+		return lipgloss.JoinVertical(lipgloss.Left, title, "", errMsg)
 	}
 
 	if !m.ready {
 		return "Loading diff..."
 	}
 
-	var sections []string
-
 	title := m.titleStyle.Render("Diff Viewer - " + m.filePath)
-	sections = append(sections, title)
-
-	sections = append(sections, m.viewport.View())
-
-	help := m.helpStyle.Render("j/k: line by line | d/u: half page | f/b: full page | g/G: top/bottom | esc: back")
-	sections = append(sections, help)
-
-	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+	return lipgloss.JoinVertical(lipgloss.Left, title, m.viewport.View())
 }
 
 func (m DiffViewerModel) loadDiff() tea.Cmd {
