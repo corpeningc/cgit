@@ -9,6 +9,32 @@ import (
 	"strings"
 )
 
+// GetDefaultBranch returns the repo's primary branch name.
+// It tries the remote HEAD ref first, then checks for local main/master, then falls back to "main".
+func (repo *GitRepo) GetDefaultBranch() string {
+	// Try origin's HEAD ref (set by git clone / git remote set-head)
+	cmd := exec.Command("git", "symbolic-ref", "refs/remotes/origin/HEAD")
+	cmd.Dir = repo.WorkDir
+	if out, err := cmd.Output(); err == nil {
+		ref := strings.TrimSpace(string(out))
+		// ref is like "refs/remotes/origin/main"
+		if idx := strings.LastIndex(ref, "/"); idx >= 0 {
+			return ref[idx+1:]
+		}
+	}
+
+	// Fall back to checking whether main or master exist locally
+	for _, branch := range []string{"main", "master"} {
+		check := exec.Command("git", "rev-parse", "--verify", branch)
+		check.Dir = repo.WorkDir
+		if check.Run() == nil {
+			return branch
+		}
+	}
+
+	return "main"
+}
+
 func (repo *GitRepo) GetCurrentBranch() (string, error) {
 	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
 	cmd.Env = os.Environ()
@@ -28,8 +54,8 @@ func (repo *GitRepo) MergeLatest(branch string) error {
 		return err
 	}
 
-	// Probably dont want to merge into main or master directly so just pull
-	if currentBranch == "main" || currentBranch == "master" {
+	// Don't merge into the default branch directly — just pull
+	if currentBranch == repo.GetDefaultBranch() {
 		cmd := exec.Command("git", "pull")
 		cmd.Dir = repo.WorkDir
 

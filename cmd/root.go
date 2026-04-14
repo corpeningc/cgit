@@ -74,7 +74,7 @@ func init() {
 	rootCmd.AddCommand(fullCleanCmd)
 	rootCmd.AddCommand(pullCmd)
 
-	featureCmd.Flags().StringP("origin", "o", "main", "The branch to pull latest changes from before creating the feature branch")
+	featureCmd.Flags().StringP("origin", "o", "", "The branch to pull latest changes from before creating the feature branch (defaults to repo's primary branch)")
 	featureCmd.Flags().StringP("new", "n", "", "The name of the new feature branch")
 	featureCmd.Flags().BoolP("close", "c", false, "The name of the branch to close after creating the new feature branch")
 	rootCmd.AddCommand(featureCmd)
@@ -353,6 +353,9 @@ var featureCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
 		origin, err := cmd.Flags().GetString("origin")
+		if origin == "" {
+			origin = repo.GetDefaultBranch()
+		}
 		new := cmd.Flags().Changed("new")
 		close := cmd.Flags().Changed("close")
 
