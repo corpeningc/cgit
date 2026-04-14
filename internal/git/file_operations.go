@@ -162,6 +162,15 @@ func (repo *GitRepo) FileDiff(filePath string, staged bool) (string, error) {
 	return "No differences to show for this file.\n\nThis might be because:\n- The file is unmodified\n- The file was renamed\n- The file is not tracked by git", nil
 }
 
+// GetConflictContent returns the raw file content (with conflict markers) for display.
+func (repo *GitRepo) GetConflictContent(filePath string) (string, error) {
+	content, err := os.ReadFile(filepath.Join(repo.WorkDir, filePath))
+	if err != nil {
+		return "", fmt.Errorf("reading conflict file: %w", err)
+	}
+	return string(content), nil
+}
+
 var conflictStatuses = map[string]bool{
 	"UU": true, "AA": true, "DD": true,
 	"AU": true, "UA": true, "DU": true, "UD": true,
