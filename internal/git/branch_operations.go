@@ -176,3 +176,68 @@ func (repo *GitRepo) DeleteBranch(branchName string) error {
 	return formatCommandError("delete branch", err, stdout, stderr)
 }
 
+func (repo *GitRepo) ForceDeleteBranch(branchName string) error {
+	cmd := exec.Command("git", "branch", "-D", branchName)
+	cmd.Dir = repo.WorkDir
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	return formatCommandError("force delete branch", err, stdout, stderr)
+}
+
+func (repo *GitRepo) RenameBranch(oldName, newName string) error {
+	cmd := exec.Command("git", "branch", "-m", oldName, newName)
+	cmd.Dir = repo.WorkDir
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	return formatCommandError("rename branch", err, stdout, stderr)
+}
+
+type BranchDetail struct {
+	Name    string
+	Current bool
+	Hash    string
+	Subject string
+	Date    string
+}
+
+func (repo *GitRepo) GetBranchDetails() ([]BranchDetail, error) {
+	format := "%(refname:short)|%(HEAD)|%(objectname:short)|%(subject)|%(committerdate:relative)"
+	cmd := exec.Command("git", "for-each-ref", "--format="+format, "refs/heads/", "--sort=-committerdate")
+	cmd.Dir = repo.WorkDir
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return nil, formatCommandError("get branch details", err, stdout, stderr)
+	}
+
+	var branches []BranchDetail
+	for _, line := range strings.Split(strings.TrimSpace(stdout.String()), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "|", 5)
+		if len(parts) < 5 {
+			continue
+		}
+		branches = append(branches, BranchDetail{
+			Name:    parts[0],
+			Current: parts[1] == "*",
+			Hash:    parts[2],
+			Subject: parts[3],
+			Date:    parts[4],
+		})
+	}
+	return branches, nil
+}
+

@@ -10,6 +10,17 @@ import (
 	"github.com/corpeningc/cgit/internal/git"
 )
 
+type stashOpMsg struct {
+	ref string
+	op  string // "pop", "apply", "drop"
+	err error
+}
+
+type stashRefreshMsg struct {
+	stashes []git.StashEntry
+	err     error
+}
+
 type StashPickerModel struct {
 	repo    *git.GitRepo
 	mode    Mode
@@ -25,9 +36,19 @@ type StashPickerModel struct {
 	filteredIndices []int
 	searchSelected  int
 
+	diffViewer DiffViewerModel
+	splitPane  bool
+
+	lastStatus     string
+	showLastStatus bool
+
 	titleStyle      lipgloss.Style
 	selectedStyle   lipgloss.Style
 	unselectedStyle lipgloss.Style
+	successStyle    lipgloss.Style
+	errorStyle      lipgloss.Style
+	helpStyle       lipgloss.Style
+	separatorStyle  lipgloss.Style
 }
 
 func NewStashPickerModel(repo *git.GitRepo, stashes []git.StashEntry) StashPickerModel {
@@ -36,20 +57,34 @@ func NewStashPickerModel(repo *git.GitRepo, stashes []git.StashEntry) StashPicke
 	si.CharLimit = 100
 	si.Width = 50
 
-	return StashPickerModel{
-		repo:    repo,
-		mode:    NormalMode,
-		stashes: stashes,
+	m := StashPickerModel{
+		repo:      repo,
+		mode:      NormalMode,
+		stashes:   stashes,
+		splitPane: true,
 
 		searchInput: si,
 
 		titleStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("#F1D3AB")).Bold(true),
 		selectedStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("#F1D3AB")).Bold(true),
-		unselectedStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Bold(true),
+		unselectedStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
+		successStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("46")).Bold(true),
+		errorStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true),
+		helpStyle:       lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
+		separatorStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 	}
+
+	if len(stashes) > 0 {
+		m.diffViewer = NewDiffViewerModel(repo, stashes[0].Ref)
+	}
+
+	return m
 }
 
 func (m StashPickerModel) Init() tea.Cmd {
+	if len(m.stashes) > 0 {
+		return tea.Batch(textinput.Blink, m.loadCurrentStashDiff())
+	}
 	return textinput.Blink
 }
 
@@ -57,21 +92,33 @@ func (m StashPickerModel) renderStash(i int) string {
 	entry := m.stashes[i]
 	prefix := "  "
 	style := m.unselectedStyle
-
 	if i == m.currentIndex {
 		prefix = "> "
 		style = m.selectedStyle
 	}
-
-	line := fmt.Sprintf("%s [%s] %s", prefix, entry.Ref, entry.Description)
-	return style.Render(line)
+	return style.Render(fmt.Sprintf("%s[%s] %s", prefix, entry.Ref, entry.Description))
 }
 
 func (m StashPickerModel) View() string {
+	leftWidth := m.width / 2
+	if leftWidth < 10 {
+		leftWidth = m.width
+	}
+
 	var sections []string
 
 	if m.mode != SearchMode {
-		sections = append(sections, m.titleStyle.Render("Select a stash to pop"))
+		sections = append(sections, m.titleStyle.Render("Stashes"))
+
+		if m.showLastStatus {
+			style := m.successStyle
+			if strings.HasPrefix(m.lastStatus, "✗") {
+				style = m.errorStyle
+			}
+			sections = append(sections, style.Render(m.lastStatus))
+		}
+
+		sections = append(sections, "")
 
 		startIdx := m.scrollOffset
 		endIdx := min(startIdx+m.visibleLines, len(m.stashes))
@@ -80,13 +127,12 @@ func (m StashPickerModel) View() string {
 		}
 
 		if len(m.stashes) > m.visibleLines {
-			info := fmt.Sprintf("(%d-%d of %d)", startIdx+1, endIdx, len(m.stashes))
 			sections = append(sections, "")
-			sections = append(sections, m.unselectedStyle.Render(info))
+			sections = append(sections, m.helpStyle.Render(fmt.Sprintf("(%d-%d of %d)", startIdx+1, endIdx, len(m.stashes))))
 		}
 
 		sections = append(sections, "")
-		sections = append(sections, m.unselectedStyle.Render("j/k: navigate | enter: pop | /: search | q: quit"))
+		sections = append(sections, m.helpStyle.Render("enter: pop  a: apply  d: drop  s: toggle diff  /: search  q: quit"))
 	} else {
 		sections = append(sections, m.titleStyle.Render("Search stashes:"))
 		sections = append(sections, m.searchInput.View())
@@ -108,7 +154,13 @@ func (m StashPickerModel) View() string {
 		}
 
 		sections = append(sections, "")
-		sections = append(sections, m.unselectedStyle.Render("enter: lock results | esc: back"))
+		sections = append(sections, m.helpStyle.Render("enter: lock results  esc: back"))
+	}
+
+	if m.splitPane && m.width > 20 {
+		leftPanel := lipgloss.NewStyle().Width(leftWidth).Render(strings.Join(sections, "\n"))
+		separator := m.separatorStyle.Render(strings.Repeat("│\n", m.height))
+		return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, separator, m.diffViewer.View())
 	}
 
 	return strings.Join(sections, "\n")
@@ -116,6 +168,77 @@ func (m StashPickerModel) View() string {
 
 func (m StashPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		m.visibleLines = msg.Height - 8
+		leftWidth := msg.Width / 2
+		rightWidth := msg.Width - leftWidth - 1
+		rightMsg := tea.WindowSizeMsg{Width: rightWidth, Height: msg.Height}
+		updatedDiff, diffCmd := m.diffViewer.Update(rightMsg)
+		if dv, ok := updatedDiff.(DiffViewerModel); ok {
+			m.diffViewer = dv
+		}
+		return m, diffCmd
+
+	case diffLoadedMsg:
+		updatedDiff, diffCmd := m.diffViewer.Update(msg)
+		if dv, ok := updatedDiff.(DiffViewerModel); ok {
+			m.diffViewer = dv
+		}
+		return m, diffCmd
+
+	case stashOpMsg:
+		if msg.err != nil {
+			m.lastStatus = fmt.Sprintf("✗ %s %s: %v", msg.op, msg.ref, msg.err)
+		} else {
+			m.lastStatus = fmt.Sprintf("✓ %s %s", msg.op, msg.ref)
+		}
+		m.showLastStatus = true
+		if msg.op == "drop" || msg.op == "pop" {
+			return m, m.refreshStashes()
+		}
+		return m, nil
+
+	case stashRefreshMsg:
+		if msg.err != nil {
+			m.lastStatus = fmt.Sprintf("✗ Refresh failed: %v", msg.err)
+			m.showLastStatus = true
+			return m, nil
+		}
+		m.stashes = msg.stashes
+		if len(m.stashes) == 0 {
+			return m, tea.Quit
+		}
+		if m.currentIndex >= len(m.stashes) {
+			m.currentIndex = len(m.stashes) - 1
+		}
+		return m, m.loadCurrentStashDiff()
+	}
+
+	// Diff panel scroll keys (always active in normal mode)
+	if m.mode == NormalMode {
+		switch msg.(type) {
+		}
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			switch keyMsg.String() {
+			case "ctrl+j":
+				m.diffViewer.viewport.ScrollDown(1)
+				return m, nil
+			case "ctrl+k":
+				m.diffViewer.viewport.ScrollUp(1)
+				return m, nil
+			case "ctrl+d":
+				m.diffViewer.viewport.HalfPageDown()
+				return m, nil
+			case "ctrl+u":
+				m.diffViewer.viewport.HalfPageUp()
+				return m, nil
+			}
+		}
+	}
 
 	if m.mode == SearchMode {
 		switch msg := msg.(type) {
@@ -137,7 +260,7 @@ func (m StashPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.mode = NormalMode
 				m.currentIndex = 0
-				return m, nil
+				return m, m.loadCurrentStashDiff()
 			}
 		}
 
@@ -151,11 +274,6 @@ func (m StashPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.visibleLines = msg.Height - 6
-
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "esc":
@@ -165,26 +283,37 @@ func (m StashPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.stashes) > 0 {
 				m.currentIndex = (m.currentIndex + 1) % len(m.stashes)
 				m.adjustScrolling()
+				return m, m.loadCurrentStashDiff()
 			}
 
 		case "k":
 			if len(m.stashes) > 0 {
 				m.currentIndex = (m.currentIndex - 1 + len(m.stashes)) % len(m.stashes)
 				m.adjustScrolling()
+				return m, m.loadCurrentStashDiff()
 			}
+
+		case "s":
+			m.splitPane = !m.splitPane
 
 		case "enter":
 			if len(m.stashes) == 0 {
 				return m, tea.Quit
 			}
 			ref := m.stashes[m.currentIndex].Ref
-			err := m.repo.StashPopRef(ref)
-			if err != nil {
-				fmt.Printf("Error popping stash: %v\n", err)
-			} else {
-				fmt.Printf("Successfully popped stash '%s'.\n", ref)
+			return m, m.stashOp(ref, "pop")
+
+		case "a":
+			if len(m.stashes) > 0 {
+				ref := m.stashes[m.currentIndex].Ref
+				return m, m.stashOp(ref, "apply")
 			}
-			return m, tea.Quit
+
+		case "d":
+			if len(m.stashes) > 0 {
+				ref := m.stashes[m.currentIndex].Ref
+				return m, m.stashOp(ref, "drop")
+			}
 
 		case "/":
 			m.mode = SearchMode
@@ -197,13 +326,56 @@ func (m StashPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m *StashPickerModel) loadCurrentStashDiff() tea.Cmd {
+	if len(m.stashes) == 0 {
+		return nil
+	}
+	ref := m.stashes[m.currentIndex].Ref
+	m.diffViewer = NewDiffViewerModel(m.repo, ref)
+	if m.width > 0 {
+		leftWidth := m.width / 2
+		rightWidth := m.width - leftWidth - 1
+		sizeMsg := tea.WindowSizeMsg{Width: rightWidth, Height: m.height}
+		updated, _ := m.diffViewer.Update(sizeMsg)
+		if dv, ok := updated.(DiffViewerModel); ok {
+			m.diffViewer = dv
+		}
+	}
+	repo := m.repo
+	return func() tea.Msg {
+		content, err := repo.StashDiff(ref)
+		return diffLoadedMsg{content: content, err: err}
+	}
+}
+
+func (m StashPickerModel) stashOp(ref, op string) tea.Cmd {
+	return func() tea.Msg {
+		var err error
+		switch op {
+		case "pop":
+			err = m.repo.StashPopRef(ref)
+		case "apply":
+			err = m.repo.StashApply(ref)
+		case "drop":
+			err = m.repo.StashDrop(ref)
+		}
+		return stashOpMsg{ref: ref, op: op, err: err}
+	}
+}
+
+func (m StashPickerModel) refreshStashes() tea.Cmd {
+	return func() tea.Msg {
+		stashes, err := m.repo.StashList()
+		return stashRefreshMsg{stashes: stashes, err: err}
+	}
+}
+
 func (m *StashPickerModel) performSearch() {
 	if m.searchQuery == "" {
 		m.filteredIndices = nil
 		m.searchSelected = 0
 		return
 	}
-
 	query := strings.ToLower(m.searchQuery)
 	m.filteredIndices = []int{}
 	for i, entry := range m.stashes {
@@ -265,22 +437,17 @@ func StartStashPicker(repo *git.GitRepo) error {
 	if err != nil {
 		return err
 	}
-
 	if len(stashes) == 0 {
 		fmt.Println("No stashes found.")
 		return nil
 	}
-
-	// Skip picker when there's only one stash
 	if len(stashes) == 1 {
-		err = repo.StashPopRef(stashes[0].Ref)
-		if err != nil {
+		if err := repo.StashPopRef(stashes[0].Ref); err != nil {
 			return err
 		}
-		fmt.Printf("Successfully popped stash '%s'.\n", stashes[0].Ref)
+		fmt.Printf("Popped stash '%s'.\n", stashes[0].Ref)
 		return nil
 	}
-
 	m := NewStashPickerModel(repo, stashes)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err = p.Run()

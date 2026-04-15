@@ -7,14 +7,17 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/corpeningc/cgit/internal/config"
 	"github.com/corpeningc/cgit/internal/git"
 	"github.com/corpeningc/cgit/internal/ui"
 	"github.com/spf13/cobra"
 )
 
+// HandleError prints a styled error and optionally exits.
 func HandleError(operation string, err error, close bool) {
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error %s: %v\n", operation, err)
+		msg := strings.TrimSpace(err.Error())
+		fmt.Fprintf(os.Stderr, "\033[31;1m✗\033[0m %s: %s\n", operation, msg)
 		if close {
 			os.Exit(1)
 		}
@@ -86,6 +89,13 @@ func init() {
 	rootCmd.AddCommand(amendCmd)
 
 	rootCmd.AddCommand(conflictsCmd)
+	rootCmd.AddCommand(undoCmd)
+	rootCmd.AddCommand(branchesCmd)
+
+	rebaseCmd.Flags().IntP("limit", "n", 0, "Number of commits to show (default from config)")
+	rootCmd.AddCommand(rebaseCmd)
+
+	rootCmd.AddCommand(configCmd)
 }
 
 var manageCmd = &cobra.Command{
@@ -458,36 +468,64 @@ var logCmd = &cobra.Command{
 var statusCommand = &cobra.Command{
 	Use:     "status",
 	Aliases: []string{"st"},
-	Short:   "Get the status of the current branch",
+	Short:   "Browse repository status in an interactive TUI",
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
+		err := ui.StartStatusViewer(repo)
+		HandleError("showing status", err, true)
+	},
+}
 
-		repoStatus, err := repo.GetRepositoryStatus()
-		HandleError("using status command", err, true)
+var undoCmd = &cobra.Command{
+	Use:   "undo",
+	Short: "Soft-reset the last commit, keeping changes staged",
+	Run: func(cmd *cobra.Command, args []string) {
+		repo := git.New(".")
+		err := repo.UndoLastCommit()
+		HandleError("undoing last commit", err, true)
+		fmt.Println("Last commit undone. Changes are still staged.")
+	},
+}
 
-		fmt.Printf("Fetching repo status for %s\n\n", repoStatus.CurrentBranch)
+var branchesCmd = &cobra.Command{
+	Use:     "branches",
+	Aliases: []string{"br"},
+	Short:   "Browse and manage branches in an interactive TUI",
+	Run: func(cmd *cobra.Command, args []string) {
+		repo := git.New(".")
+		err := ui.StartBranchManager(repo)
+		HandleError("managing branches", err, true)
+	},
+}
 
-		if len(repoStatus.StagedFiles) > 0 {
-			fmt.Printf("Staged Changes: \n")
-			for _, file := range repoStatus.StagedFiles {
-				fmt.Printf("%s \t %s\n", file.Status, file.Path)
-			}
-		} else {
-			fmt.Println("No staged changes")
+var rebaseCmd = &cobra.Command{
+	Use:   "rebase",
+	Short: "Interactively rebase the last N commits",
+	Run: func(cmd *cobra.Command, args []string) {
+		repo := git.New(".")
+		cfg := config.Load()
+		limit, _ := cmd.Flags().GetInt("limit")
+		if limit <= 0 {
+			limit = cfg.RebaseLimit
 		}
+		err := ui.StartRebasePicker(repo, limit)
+		HandleError("rebasing", err, true)
+	},
+}
 
-		fmt.Println()
-
-		if len(repoStatus.UnstagedFiles) > 0 {
-			fmt.Printf("Unstaged Files: \n")
-			for _, file := range repoStatus.UnstagedFiles {
-				fmt.Printf("%s \t %s\n", file.Status, file.Path)
-			}
+var configCmd = &cobra.Command{
+	Use:   "config",
+	Short: "Show or edit cgit configuration",
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg := config.Load()
+		fmt.Printf("Config file: %s\n\n", config.Path())
+		fmt.Printf("log_limit:    %d\n", cfg.LogLimit)
+		fmt.Printf("rebase_limit: %d\n", cfg.RebaseLimit)
+		fmt.Printf("split_pane:   %v\n", cfg.SplitPane)
+		if cfg.Editor != "" {
+			fmt.Printf("editor:       %s\n", cfg.Editor)
 		} else {
-			fmt.Println("No unstaged changes")
+			fmt.Printf("editor:       (uses $EDITOR)\n")
 		}
-
-		fmt.Println()
-
 	},
 }

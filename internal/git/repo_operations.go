@@ -5,8 +5,15 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 )
+
+type RebaseEntry struct {
+	Action  string
+	Hash    string
+	Subject string
+}
 
 type RepoStatus struct {
 	CurrentBranch string
@@ -283,6 +290,92 @@ func (repo *GitRepo) GetLog(limit int) (string, error) {
 		return "", formatCommandError("get log", err, stdout, stderr)
 	}
 	return stdout.String(), nil
+}
+
+func (repo *GitRepo) CherryPick(hash string) error {
+	cmd := exec.Command("git", "cherry-pick", hash)
+	cmd.Dir = repo.WorkDir
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	return formatCommandError("cherry-pick", cmd.Run(), stdout, stderr)
+}
+
+func (repo *GitRepo) StashDiff(ref string) (string, error) {
+	cmd := exec.Command("git", "stash", "show", "-p", "--word-diff=color", ref)
+	cmd.Dir = repo.WorkDir
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return "", formatCommandError("stash diff", err, stdout, stderr)
+	}
+	return stdout.String(), nil
+}
+
+func (repo *GitRepo) StashApply(ref string) error {
+	cmd := exec.Command("git", "stash", "apply", ref)
+	cmd.Dir = repo.WorkDir
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	return formatCommandError("apply stash", cmd.Run(), stdout, stderr)
+}
+
+func (repo *GitRepo) StashDrop(ref string) error {
+	cmd := exec.Command("git", "stash", "drop", ref)
+	cmd.Dir = repo.WorkDir
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	return formatCommandError("drop stash", cmd.Run(), stdout, stderr)
+}
+
+func (repo *GitRepo) GetAheadBehind() (ahead, behind int, err error) {
+	aheadCmd := exec.Command("git", "rev-list", "--count", "@{u}..HEAD")
+	aheadCmd.Dir = repo.WorkDir
+	aheadOut, aheadErr := aheadCmd.Output()
+	if aheadErr != nil {
+		return 0, 0, fmt.Errorf("no upstream")
+	}
+	behindCmd := exec.Command("git", "rev-list", "--count", "HEAD..@{u}")
+	behindCmd.Dir = repo.WorkDir
+	behindOut, _ := behindCmd.Output()
+	ahead, _ = strconv.Atoi(strings.TrimSpace(string(aheadOut)))
+	behind, _ = strconv.Atoi(strings.TrimSpace(string(behindOut)))
+	return ahead, behind, nil
+}
+
+func (repo *GitRepo) UndoLastCommit() error {
+	cmd := exec.Command("git", "reset", "HEAD~1", "--soft")
+	cmd.Dir = repo.WorkDir
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	return formatCommandError("undo commit", cmd.Run(), stdout, stderr)
+}
+
+func (repo *GitRepo) GetRebaseCommits(limit int) ([]RebaseEntry, error) {
+	cmd := exec.Command("git", "log", fmt.Sprintf("-n%d", limit), "--pretty=format:%h|%s")
+	cmd.Dir = repo.WorkDir
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, formatCommandError("get rebase commits", err, stdout, stderr)
+	}
+	var entries []RebaseEntry
+	for _, line := range strings.Split(strings.TrimSpace(stdout.String()), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "|", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		entries = append(entries, RebaseEntry{Action: "pick", Hash: parts[0], Subject: parts[1]})
+	}
+	return entries, nil
 }
 
 func (repo *GitRepo) FullClean() error {
