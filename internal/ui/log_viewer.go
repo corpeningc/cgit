@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -10,6 +11,11 @@ import (
 )
 
 var hashRegex = regexp.MustCompile(`\b([0-9a-f]{7,12})\b`)
+
+type cherryPickMsg struct {
+	hash string
+	err  error
+}
 
 type LogViewerModel struct {
 	repo         *git.GitRepo
@@ -22,12 +28,18 @@ type LogViewerModel struct {
 	width        int
 	height       int
 
+	statusMsg  string
+	showStatus bool
+
+	statusBar  StatusBar
 	diffViewer DiffViewerModel
 
 	titleStyle      lipgloss.Style
 	selectedStyle   lipgloss.Style
 	unselectedStyle lipgloss.Style
 	helpStyle       lipgloss.Style
+	successStyle    lipgloss.Style
+	errorStyle      lipgloss.Style
 }
 
 func NewLogViewerModel(repo *git.GitRepo, content string) LogViewerModel {
@@ -50,11 +62,13 @@ func NewLogViewerModel(repo *git.GitRepo, content string) LogViewerModel {
 		selectedStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("#F1D3AB")).Bold(true),
 		unselectedStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
 		helpStyle:       lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
+		successStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("46")).Bold(true),
+		errorStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true),
 	}
 }
 
 func (m LogViewerModel) Init() tea.Cmd {
-	return nil
+	return FetchStatusBar(m.repo)
 }
 
 func (m LogViewerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -97,6 +111,19 @@ func (m LogViewerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.visibleLines = msg.Height - 4
 
+	case StatusBarMsg:
+		m.statusBar = msg.Bar
+		return m, nil
+
+	case cherryPickMsg:
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("✗ cherry-pick %s: %v", msg.hash, msg.err)
+		} else {
+			m.statusMsg = fmt.Sprintf("✓ Cherry-picked %s", msg.hash)
+		}
+		m.showStatus = true
+		return m, FetchStatusBar(m.repo)
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "esc":
@@ -124,6 +151,12 @@ func (m LogViewerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.adjustScrolling()
 			}
 
+		case "p":
+			if m.currentIndex < len(m.commitHashes) && m.commitHashes[m.currentIndex] != "" {
+				hash := m.commitHashes[m.currentIndex]
+				return m, m.cherryPickCmd(hash)
+			}
+
 		case "enter":
 			if m.currentIndex < len(m.commitHashes) && m.commitHashes[m.currentIndex] != "" {
 				hash := m.commitHashes[m.currentIndex]
@@ -149,6 +182,13 @@ func (m LogViewerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m LogViewerModel) cherryPickCmd(hash string) tea.Cmd {
+	return func() tea.Msg {
+		err := m.repo.CherryPick(hash)
+		return cherryPickMsg{hash: hash, err: err}
+	}
+}
+
 func (m LogViewerModel) loadCommitDetail(hash string) tea.Cmd {
 	return func() tea.Msg {
 		content, err := m.repo.ShowCommit(hash)
@@ -162,7 +202,21 @@ func (m LogViewerModel) View() string {
 	}
 
 	var sections []string
+
+	if bar := m.statusBar.Render(m.helpStyle); bar != "" {
+		sections = append(sections, bar)
+	}
+
 	sections = append(sections, m.titleStyle.Render("Git Log"))
+
+	if m.showStatus {
+		style := m.successStyle
+		if strings.HasPrefix(m.statusMsg, "✗") {
+			style = m.errorStyle
+		}
+		sections = append(sections, style.Render(m.statusMsg))
+	}
+
 	sections = append(sections, "")
 
 	startIdx := m.scrollOffset
@@ -178,7 +232,7 @@ func (m LogViewerModel) View() string {
 	}
 
 	sections = append(sections, "")
-	help := "j/k: navigate | enter: view commit | g/G: top/bottom | q: quit"
+	help := "j/k: navigate | enter: view commit | p: cherry-pick | g/G: top/bottom | q: quit"
 	sections = append(sections, m.helpStyle.Render(help))
 
 	return strings.Join(sections, "\n")

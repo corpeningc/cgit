@@ -458,36 +458,10 @@ var logCmd = &cobra.Command{
 var statusCommand = &cobra.Command{
 	Use:     "status",
 	Aliases: []string{"st"},
-	Short:   "Get the status of the current branch",
+	Short:   "Browse repository status in an interactive TUI",
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := git.New(".")
-
-		repoStatus, err := repo.GetRepositoryStatus()
-		HandleError("using status command", err, true)
-
-		fmt.Printf("Fetching repo status for %s\n\n", repoStatus.CurrentBranch)
-
-		if len(repoStatus.StagedFiles) > 0 {
-			fmt.Printf("Staged Changes: \n")
-			for _, file := range repoStatus.StagedFiles {
-				fmt.Printf("%s \t %s\n", file.Status, file.Path)
-			}
-		} else {
-			fmt.Println("No staged changes")
-		}
-
-		fmt.Println()
-
-		if len(repoStatus.UnstagedFiles) > 0 {
-			fmt.Printf("Unstaged Files: \n")
-			for _, file := range repoStatus.UnstagedFiles {
-				fmt.Printf("%s \t %s\n", file.Status, file.Path)
-			}
-		} else {
-			fmt.Println("No unstaged changes")
-		}
-
-		fmt.Println()
-
+		err := ui.StartStatusViewer(repo)
+		HandleError("showing status", err, true)
 	},
 }
