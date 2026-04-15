@@ -52,6 +52,8 @@ type FilePickerModel struct {
 	diffViewer DiffViewerModel
 	splitPane  bool
 
+	statusBar StatusBar
+
 	// Styles
 	titleStyle      lipgloss.Style
 	selectedStyle   lipgloss.Style
@@ -133,6 +135,7 @@ func NewFilePicker(repo *git.GitRepo, stagedFileStatuses []git.FileStatus, unsta
 func (m FilePickerModel) Init() tea.Cmd {
 	var cmds []tea.Cmd
 	cmds = append(cmds, textinput.Blink)
+	cmds = append(cmds, FetchStatusBar(m.repo))
 	if len(m.files) > 0 {
 		cmds = append(cmds, m.diffViewer.Init())
 	}
@@ -168,6 +171,10 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, diffCmd
 
+	case StatusBarMsg:
+		m.statusBar = msg.Bar
+		return m, nil
+
 	case GitOperationCompleteMsg:
 		m.operationInProgress = false
 		if msg.success {
@@ -181,7 +188,7 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.lastOperationStatus = fmt.Sprintf("✓ %s %d file(s)", action, len(msg.filesAffected))
 			m.showStatusMessage = true
-			return m, tea.Batch(m.refreshRepositoryStatus(), m.clearStatusAfterDelay())
+			return m, tea.Batch(m.refreshRepositoryStatus(), m.clearStatusAfterDelay(), FetchStatusBar(m.repo))
 		}
 		m.lastOperationStatus = fmt.Sprintf("✗ Error: %v", msg.error)
 		m.showStatusMessage = true
@@ -545,6 +552,11 @@ func (m FilePickerModel) View() string {
 
 	// ── Left panel: file list ──────────────────────────────────────────────
 	var leftSections []string
+
+	if bar := m.statusBar.Render(m.helpStyle); bar != "" {
+		leftSections = append(leftSections, bar)
+	}
+
 	var managing string
 	if m.staged {
 		managing = "Staged changes"

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -283,6 +284,50 @@ func (repo *GitRepo) GetLog(limit int) (string, error) {
 		return "", formatCommandError("get log", err, stdout, stderr)
 	}
 	return stdout.String(), nil
+}
+
+func (repo *GitRepo) CherryPick(hash string) error {
+	cmd := exec.Command("git", "cherry-pick", hash)
+	cmd.Dir = repo.WorkDir
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	return formatCommandError("cherry-pick", err, stdout, stderr)
+}
+
+func (repo *GitRepo) StashDiff(ref string) (string, error) {
+	cmd := exec.Command("git", "stash", "show", "-p", "--word-diff=color", ref)
+	cmd.Dir = repo.WorkDir
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		return "", formatCommandError("stash diff", err, stdout, stderr)
+	}
+	return stdout.String(), nil
+}
+
+func (repo *GitRepo) GetAheadBehind() (ahead, behind int, err error) {
+	aheadCmd := exec.Command("git", "rev-list", "--count", "@{u}..HEAD")
+	aheadCmd.Dir = repo.WorkDir
+	aheadOut, aheadErr := aheadCmd.Output()
+	if aheadErr != nil {
+		return 0, 0, fmt.Errorf("no upstream")
+	}
+
+	behindCmd := exec.Command("git", "rev-list", "--count", "HEAD..@{u}")
+	behindCmd.Dir = repo.WorkDir
+	behindOut, _ := behindCmd.Output()
+
+	ahead, _ = strconv.Atoi(strings.TrimSpace(string(aheadOut)))
+	behind, _ = strconv.Atoi(strings.TrimSpace(string(behindOut)))
+	return ahead, behind, nil
 }
 
 func (repo *GitRepo) FullClean() error {

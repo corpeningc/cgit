@@ -25,9 +25,13 @@ type StashPickerModel struct {
 	filteredIndices []int
 	searchSelected  int
 
+	diffViewer DiffViewerModel
+	splitPane  bool
+
 	titleStyle      lipgloss.Style
 	selectedStyle   lipgloss.Style
 	unselectedStyle lipgloss.Style
+	separatorStyle  lipgloss.Style
 }
 
 func NewStashPickerModel(repo *git.GitRepo, stashes []git.StashEntry) StashPickerModel {
@@ -36,20 +40,31 @@ func NewStashPickerModel(repo *git.GitRepo, stashes []git.StashEntry) StashPicke
 	si.CharLimit = 100
 	si.Width = 50
 
-	return StashPickerModel{
-		repo:    repo,
-		mode:    NormalMode,
-		stashes: stashes,
+	m := StashPickerModel{
+		repo:      repo,
+		mode:      NormalMode,
+		stashes:   stashes,
+		splitPane: true,
 
 		searchInput: si,
 
 		titleStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("#F1D3AB")).Bold(true),
 		selectedStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("#F1D3AB")).Bold(true),
 		unselectedStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Bold(true),
+		separatorStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 	}
+
+	if len(stashes) > 0 {
+		m.diffViewer = NewDiffViewerModel(repo, stashes[0].Ref)
+	}
+
+	return m
 }
 
 func (m StashPickerModel) Init() tea.Cmd {
+	if len(m.stashes) > 0 {
+		return tea.Batch(textinput.Blink, m.loadCurrentStashDiff())
+	}
 	return textinput.Blink
 }
 
@@ -68,6 +83,11 @@ func (m StashPickerModel) renderStash(i int) string {
 }
 
 func (m StashPickerModel) View() string {
+	leftWidth := m.width / 2
+	if leftWidth < 10 {
+		leftWidth = m.width
+	}
+
 	var sections []string
 
 	if m.mode != SearchMode {
@@ -84,9 +104,6 @@ func (m StashPickerModel) View() string {
 			sections = append(sections, "")
 			sections = append(sections, m.unselectedStyle.Render(info))
 		}
-
-		sections = append(sections, "")
-		sections = append(sections, m.unselectedStyle.Render("j/k: navigate | enter: pop | /: search | q: quit"))
 	} else {
 		sections = append(sections, m.titleStyle.Render("Search stashes:"))
 		sections = append(sections, m.searchInput.View())
@@ -106,9 +123,12 @@ func (m StashPickerModel) View() string {
 		} else {
 			sections = append(sections, m.unselectedStyle.Render("Type to search..."))
 		}
+	}
 
-		sections = append(sections, "")
-		sections = append(sections, m.unselectedStyle.Render("enter: lock results | esc: back"))
+	if m.splitPane {
+		leftPanel := lipgloss.NewStyle().Width(leftWidth).Render(strings.Join(sections, "\n"))
+		separator := m.separatorStyle.Render(strings.Repeat("│\n", m.height))
+		return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, separator, m.diffViewer.View())
 	}
 
 	return strings.Join(sections, "\n")
@@ -155,6 +175,21 @@ func (m StashPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.visibleLines = msg.Height - 6
+		leftWidth := msg.Width / 2
+		rightWidth := msg.Width - leftWidth - 1
+		rightMsg := tea.WindowSizeMsg{Width: rightWidth, Height: msg.Height}
+		updatedDiff, diffCmd := m.diffViewer.Update(rightMsg)
+		if dv, ok := updatedDiff.(DiffViewerModel); ok {
+			m.diffViewer = dv
+		}
+		return m, diffCmd
+
+	case diffLoadedMsg:
+		updatedDiff, diffCmd := m.diffViewer.Update(msg)
+		if dv, ok := updatedDiff.(DiffViewerModel); ok {
+			m.diffViewer = dv
+		}
+		return m, diffCmd
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -165,13 +200,18 @@ func (m StashPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.stashes) > 0 {
 				m.currentIndex = (m.currentIndex + 1) % len(m.stashes)
 				m.adjustScrolling()
+				return m, m.loadCurrentStashDiff()
 			}
 
 		case "k":
 			if len(m.stashes) > 0 {
 				m.currentIndex = (m.currentIndex - 1 + len(m.stashes)) % len(m.stashes)
 				m.adjustScrolling()
+				return m, m.loadCurrentStashDiff()
 			}
+
+		case "s":
+			m.splitPane = !m.splitPane
 
 		case "enter":
 			if len(m.stashes) == 0 {
@@ -195,6 +235,28 @@ func (m StashPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, cmd
+}
+
+func (m *StashPickerModel) loadCurrentStashDiff() tea.Cmd {
+	if len(m.stashes) == 0 {
+		return nil
+	}
+	ref := m.stashes[m.currentIndex].Ref
+	m.diffViewer = NewDiffViewerModel(m.repo, ref)
+	if m.width > 0 {
+		leftWidth := m.width / 2
+		rightWidth := m.width - leftWidth - 1
+		sizeMsg := tea.WindowSizeMsg{Width: rightWidth, Height: m.height}
+		updatedDiff, _ := m.diffViewer.Update(sizeMsg)
+		if dv, ok := updatedDiff.(DiffViewerModel); ok {
+			m.diffViewer = dv
+		}
+	}
+	repo := m.repo
+	return func() tea.Msg {
+		content, err := repo.StashDiff(ref)
+		return diffLoadedMsg{content: content, err: err}
+	}
 }
 
 func (m *StashPickerModel) performSearch() {
