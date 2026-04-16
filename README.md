@@ -6,53 +6,87 @@ Built in Go with Cobra CLI and Charm TUI libraries for learning purposes.
 
 ## Features
 
-### Interactive Shell
-- Launch interactive mode with `cgit` or `cgit shell`
+### Interactive TUIs
+- **Log viewer** — browse commit history with `cgit log`; press `enter` to view a diff, `p` to cherry-pick
+- **Status viewer** — tabbed staged/unstaged file list with `cgit status` (or `cgit st`); press `m` to launch file manager
+- **Branch manager** — navigate, switch, delete, and rename branches with `cgit branches` (or `cgit br`)
+- **Stash picker** — browse stashes with a split-pane diff preview using `cgit pop`; `enter` pops, `a` applies, `d` drops
+- **Conflict resolver** — step through merge conflicts interactively with `cgit conflicts` (or `cgit cf`)
+- **File manager** — stage and restore files with fuzzy search using `cgit manage` (or `cgit m`)
 
-### File Management
-- Interactive file management with `cgit manage` (or `cgit m`)
-  - Supports staging and restoring files with fuzzy search
-  - Use `-s` flag to manage staged files
+### Commits
+- Commit staged changes: `cgit commit <message>`
+- Amend the last commit: `cgit amend`
+- Commit and push in one step: `cgit commit-and-push <message>` (or `cgit cap`)
+- Undo the last commit (keeps changes staged): `cgit undo`
 
-### Branch Operations
-- Create and switch to new branches with `cgit new-branch <name>` (or `cgit nb`)
-- Interactive branch selection with `cgit switch` and no arguments
-- Switch between existing branches via `cgit switch [branch]` (or `cgit sw`)
-  - Use `-r` flag to include remote branches
-- Feature branch workflow with `cgit feature` (or `cgit feat`)
-  - Create feature branches: `cgit feat -n <name> -o <origin>`
-  - Close feature branches: `cgit feat -c -o <origin>`
+### Branches
+- Create and switch to a new branch: `cgit new-branch <name>` (or `cgit nb`)
+- Switch branches interactively: `cgit switch` (or `cgit sw`); use `-r` to include remotes
+- Feature branch workflow: `cgit feature` (or `cgit feat`)
+  - Create: `cgit feat -n <name> -o <origin>`
+  - Close: `cgit feat -c -o <origin>`
 
-### Commits and Pushes
-- Commit changes with `cgit commit <message>`
-- Push to remote with `cgit push`
-- Commit and push in one step with `cgit commit-and-push <message>` (or `cgit cap`)
+### Rebase
+- Interactively rebase the last N commits: `cgit rebase` (or `cgit rebase -n 20`)
+- Set the default limit in config
 
-### Stash Operations
-- Interactive stash selection with `cgit store` (WIP)
-- Stash changes with a message via `cgit store [name]`
-- Pop most recent stash with `cgit pop`
+### Remote Operations
+- Push: `cgit push`
+- Pull: `cgit pull [branch]`
+- Merge remote changes: `cgit merge <branch>`
 
-### Repository Operations
-- Pull latest changes with `cgit pull [branch]`
-- Merge remote changes with `cgit merge <branch>`
-- View repository status with `cgit status` (or `cgit st`)
-- Clean working directory with `cgit full-clean` (or `cgit fc`)
+### Stash
+- Stash changes: `cgit store [name]`
+- Pop/apply/drop stashes interactively: `cgit pop`
 
+### Utilities
+- Hard reset and clean working directory: `cgit full-clean` (or `cgit fc`)
+- Show/edit config: `cgit config`
+- Shell completions: `cgit completion --help`
+
+### Persistent Status Bar
+All TUI views show a top-line status bar with the current branch, ahead/behind counts, and a clean/dirty indicator.
+
+### Config
+cgit reads `~/.config/cgit/config.json` (or `$CGIT_CONFIG`). Defaults:
+
+```json
+{
+  "log_limit": 100,
+  "rebase_limit": 15,
+  "split_pane": true,
+  "editor": ""
+}
+```
+
+Run `cgit config` to see the active config path and values.
 
 ## Installation
 
 ### Prerequisites
-- Go 1.25 or later
-  
-``` bash
+- Go 1.21 or later
+
+```bash
 go install "github.com/corpeningc/cgit@latest"
 ```
 
+## Shell Completions
+
+```bash
+# bash
+cgit completion bash > /etc/bash_completion.d/cgit
+
+# zsh
+cgit completion zsh > "${fpath[1]}/_cgit"
+
+# fish
+cgit completion fish > ~/.config/fish/completions/cgit.fish
+```
 
 ## Usage
 
 ```bash
-cgit          # See all available commands
+cgit          # see all available commands
+cgit --help   # usage details
 ```
-# conflict line from feature branch
