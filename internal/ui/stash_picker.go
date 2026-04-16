@@ -152,7 +152,6 @@ func (m StashPickerModel) View() string {
 		} else {
 			sections = append(sections, m.unselectedStyle.Render("Type to search..."))
 		}
-
 		sections = append(sections, "")
 		sections = append(sections, m.helpStyle.Render("enter: lock results  esc: back"))
 	}
