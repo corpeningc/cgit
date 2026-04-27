@@ -47,14 +47,14 @@ func NewBranchManagerModel(repo *git.GitRepo, branches []git.BranchDetail) Branc
 		repo:     repo,
 		branches: branches,
 
-		titleStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true),
-		selectedStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("#F1D3AB")).Bold(true),
-		unselectedStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
-		currentStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("46")).Bold(true),
-		successStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("46")).Bold(true),
-		errorStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true),
-		helpStyle:       lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
-		dimStyle:        lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		titleStyle:      TitlePinkStyle,
+		selectedStyle:   SelectedPeachStyle,
+		unselectedStyle: UnselectedStyle,
+		currentStyle:    SuccessStyle,
+		successStyle:    SuccessStyle,
+		errorStyle:      ErrorStyle,
+		helpStyle:       HelpStyle,
+		dimStyle:        DimStyle,
 	}
 }
 

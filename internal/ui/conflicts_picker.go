@@ -47,13 +47,13 @@ func NewConflictsPickerModel(repo *git.GitRepo, files []git.FileStatus) Conflict
 		repo:  repo,
 		files: files,
 
-		titleStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true),
-		selectedStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("#F1D3AB")).Bold(true),
-		unselectedStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
-		errorStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true),
-		helpStyle:       lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
-		successStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("46")).Bold(true),
-		separatorStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		titleStyle:      TitlePinkStyle,
+		selectedStyle:   SelectedPeachStyle,
+		unselectedStyle: UnselectedStyle,
+		errorStyle:      ErrorStyle,
+		helpStyle:       HelpStyle,
+		successStyle:    SuccessStyle,
+		separatorStyle:  SeparatorStyle,
 	}
 
 	if len(files) > 0 {

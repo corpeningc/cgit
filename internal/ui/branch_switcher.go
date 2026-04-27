@@ -117,9 +117,9 @@ func NewBranchBranchSwitcherModel(repo *git.GitRepo, remote bool) BranchSwitcher
 		branches:    branches,
 		searchInput: searchInput,
 
-		titleStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("#F1D3AB")).Bold(true),
-		selectedStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("#F1D3AB")).Bold(true),
-		unselectedStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Bold(true),
+		titleStyle:      TitlePeachStyle,
+		selectedStyle:   SelectedPeachStyle,
+		unselectedStyle: UnselectedBoldStyle,
 	}
 }
 

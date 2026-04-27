@@ -65,13 +65,13 @@ func NewStashPickerModel(repo *git.GitRepo, stashes []git.StashEntry) StashPicke
 
 		searchInput: si,
 
-		titleStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("#F1D3AB")).Bold(true),
-		selectedStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("#F1D3AB")).Bold(true),
-		unselectedStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
-		successStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("46")).Bold(true),
-		errorStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true),
-		helpStyle:       lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
-		separatorStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		titleStyle:      TitlePeachStyle,
+		selectedStyle:   SelectedPeachStyle,
+		unselectedStyle: UnselectedStyle,
+		successStyle:    SuccessStyle,
+		errorStyle:      ErrorStyle,
+		helpStyle:       HelpStyle,
+		separatorStyle:  SeparatorStyle,
 	}
 
 	if len(stashes) > 0 {

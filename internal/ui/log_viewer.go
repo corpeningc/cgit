@@ -58,12 +58,12 @@ func NewLogViewerModel(repo *git.GitRepo, content string) LogViewerModel {
 		logLines:     lines,
 		commitHashes: hashes,
 
-		titleStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true),
-		selectedStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("#F1D3AB")).Bold(true),
-		unselectedStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
-		helpStyle:       lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
-		successStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("46")).Bold(true),
-		errorStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true),
+		titleStyle:      TitlePinkStyle,
+		selectedStyle:   SelectedPeachStyle,
+		unselectedStyle: UnselectedStyle,
+		helpStyle:       HelpStyle,
+		successStyle:    SuccessStyle,
+		errorStyle:      ErrorStyle,
 	}
 }
 
