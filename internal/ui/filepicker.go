@@ -52,6 +52,10 @@ type FilePickerModel struct {
 	diffViewer DiffViewerModel
 	splitPane  bool
 
+	// Commit modal (entered from NormalMode via 'C' / 'P')
+	commitInput     CommitInputModel
+	pushAfterCommit bool
+
 	statusBar StatusBar
 
 	// Styles
@@ -96,30 +100,13 @@ func NewFilePicker(repo *git.GitRepo, stagedFileStatuses []git.FileStatus, unsta
 		showStatusChars:      true,
 		staged:               startInStaged,
 
-		titleStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("205")).
-			Bold(true),
-
-		selectedStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("205")).
-			Bold(true),
-
-		unselectedStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("245")),
-
-		checkedStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("46")).
-			Bold(true),
-
-		helpStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("245")),
-
-		searchStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("39")).
-			Bold(true),
-
-		separatorStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("240")),
+		titleStyle:      TitlePinkStyle,
+		selectedStyle:   SelectedPinkStyle,
+		unselectedStyle: UnselectedStyle,
+		checkedStyle:    SuccessStyle,
+		helpStyle:       HelpStyle,
+		searchStyle:     SearchStyle,
+		separatorStyle:  SeparatorStyle,
 	}
 
 	m.splitPane = true
@@ -176,19 +163,27 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case GitOperationCompleteMsg:
 		m.operationInProgress = false
 		if msg.success {
-			action := "staged"
-			if msg.operation == "restore" {
-				if m.staged {
-					action = "restored from staging"
-				} else {
-					action = "discarded"
+			if msg.operation == "push" {
+				m.lastOperationStatus = "✓ Committed and pushed"
+			} else {
+				action := "staged"
+				if msg.operation == "restore" {
+					if m.staged {
+						action = "restored from staging"
+					} else {
+						action = "discarded"
+					}
 				}
+				m.lastOperationStatus = fmt.Sprintf("✓ %s %d file(s)", action, len(msg.filesAffected))
 			}
-			m.lastOperationStatus = fmt.Sprintf("✓ %s %d file(s)", action, len(msg.filesAffected))
 			m.showStatusMessage = true
 			return m, tea.Batch(m.refreshRepositoryStatus(), m.clearStatusAfterDelay(), FetchStatusBar(m.repo))
 		}
-		m.lastOperationStatus = fmt.Sprintf("✗ Error: %v", msg.error)
+		if msg.operation == "push" {
+			m.lastOperationStatus = fmt.Sprintf("✗ Push failed: %v", msg.error)
+		} else {
+			m.lastOperationStatus = fmt.Sprintf("✗ Error: %v", msg.error)
+		}
 		m.showStatusMessage = true
 		return m, m.clearStatusAfterDelay()
 
@@ -225,7 +220,47 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.showStatusMessage = false
 		return m, nil
 
+	case CommitCompleteMsg:
+		// Forward to the embedded commit input first so it records state.
+		updated, _ := m.commitInput.Update(msg)
+		if ci, ok := updated.(CommitInputModel); ok {
+			m.commitInput = ci
+		}
+		// Leave commit mode and surface the result.
+		m.mode = NormalMode
+		if msg.Err != nil {
+			m.lastOperationStatus = fmt.Sprintf("✗ Commit failed: %v", msg.Err)
+			m.showStatusMessage = true
+			m.pushAfterCommit = false
+			return m, m.clearStatusAfterDelay()
+		}
+		if m.pushAfterCommit {
+			m.pushAfterCommit = false
+			m.operationInProgress = true
+			m.lastOperationStatus = "✓ Committed — pushing..."
+			m.showStatusMessage = true
+			return m, tea.Batch(m.performPush(), m.refreshRepositoryStatus(), FetchStatusBar(m.repo))
+		}
+		m.lastOperationStatus = "✓ Committed"
+		m.showStatusMessage = true
+		return m, tea.Batch(m.refreshRepositoryStatus(), FetchStatusBar(m.repo), m.clearStatusAfterDelay())
+
 	case tea.KeyMsg:
+		// In CommitMode, route everything to the embedded commit input
+		// modal and let the parent observe canceled/committed flags.
+		if m.mode == CommitMode {
+			updated, ciCmd := m.commitInput.Update(msg)
+			if ci, ok := updated.(CommitInputModel); ok {
+				m.commitInput = ci
+			}
+			if m.commitInput.canceled {
+				m.mode = NormalMode
+				m.pushAfterCommit = false
+				m.commitInput = CommitInputModel{}
+			}
+			return m, ciCmd
+		}
+
 		// Split-pane diff scroll keys (active in Normal and locked Search mode)
 		if m.mode != DiffMode && m.mode != SearchMode || (m.mode == SearchMode && m.searchLocked) {
 			switch msg.String() {
@@ -403,6 +438,21 @@ func (m FilePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selectedFiles = make(map[string]bool)
 				return m, m.performGitOperation(selectedFiles, true)
 
+			case "C", "P":
+				if m.operationInProgress {
+					return m, nil
+				}
+				if len(m.stagedFileStatuses) == 0 {
+					m.lastOperationStatus = "Nothing staged to commit"
+					m.showStatusMessage = true
+					return m, m.clearStatusAfterDelay()
+				}
+				m.commitInput = NewCommitInputModel(m.repo)
+				m.commitInput.embedded = true
+				m.pushAfterCommit = msg.String() == "P"
+				m.mode = CommitMode
+				return m, m.commitInput.Init()
+
 			case "p":
 				if m.operationInProgress || m.staged || len(m.files) == 0 {
 					return m, nil
@@ -543,6 +593,11 @@ func (m FilePickerModel) View() string {
 		return m.diffViewer.View()
 	}
 
+	// Commit modal (entered via 'C' or 'P')
+	if m.mode == CommitMode {
+		return m.commitInput.View()
+	}
+
 	leftWidth := m.width / 2
 	if leftWidth < 10 {
 		leftWidth = m.width // fallback for very narrow terminals
@@ -566,7 +621,7 @@ func (m FilePickerModel) View() string {
 	if m.showStatusMessage && m.lastOperationStatus != "" {
 		statusStyle := m.checkedStyle
 		if strings.HasPrefix(m.lastOperationStatus, "✗") {
-			statusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
+			statusStyle = ErrorStyle
 		}
 		leftSections = append(leftSections, statusStyle.Render(m.lastOperationStatus))
 	}
@@ -724,6 +779,17 @@ func (m FilePickerModel) getSelectedFiles() []string {
 		}
 	}
 	return selected
+}
+
+func (m FilePickerModel) performPush() tea.Cmd {
+	return func() tea.Msg {
+		err := m.repo.Push()
+		return GitOperationCompleteMsg{
+			success:   err == nil,
+			error:     err,
+			operation: "push",
+		}
+	}
 }
 
 func (m FilePickerModel) performGitOperation(files []string, restore bool) tea.Cmd {

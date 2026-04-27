@@ -40,23 +40,12 @@ func NewDiffViewerModel(repo *git.GitRepo, filePath string) DiffViewerModel {
 		filePath: filePath,
 		viewport: vp,
 
-		titleStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("205")),
-
-		addedStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("46")),
-
-		removedStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196")),
-
-		contextStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("245")),
-
-		headerStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("39")),
-
-		errorStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196")),
+		titleStyle:   lipgloss.NewStyle().Foreground(colorPink),
+		addedStyle:   lipgloss.NewStyle().Foreground(colorGreen),
+		removedStyle: lipgloss.NewStyle().Foreground(colorRed),
+		contextStyle: lipgloss.NewStyle().Foreground(colorGray),
+		headerStyle:  lipgloss.NewStyle().Foreground(colorCyan),
+		errorStyle:   lipgloss.NewStyle().Foreground(colorRed),
 
 	}
 }

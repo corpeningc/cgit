@@ -16,15 +16,21 @@ type CommitInputModel struct {
 	amend     bool
 	err       error
 
+	// When true, the model is embedded inside another TUI and must not call
+	// tea.Quit on its own — the parent observes committed/canceled and
+	// transitions away from the modal itself.
+	embedded bool
+	canceled bool
+
 	// Styles
 	titleStyle lipgloss.Style
 	errorStyle lipgloss.Style
 	helpStyle  lipgloss.Style
 }
 
-type commitCompleteMsg struct {
-	success bool
-	error   error
+type CommitCompleteMsg struct {
+	Success bool
+	Err     error
 }
 
 func NewCommitInputModel(repo *git.GitRepo) CommitInputModel {
@@ -35,19 +41,11 @@ func NewCommitInputModel(repo *git.GitRepo) CommitInputModel {
 	ti.Width = 50
 
 	return CommitInputModel{
-		repo:      repo,
-		textInput: ti,
-
-		titleStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("205")).
-			Bold(true),
-
-		errorStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196")).
-			Bold(true),
-
-		helpStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("245")),
+		repo:       repo,
+		textInput:  ti,
+		titleStyle: TitlePinkStyle,
+		errorStyle: ErrorStyle,
+		helpStyle:  HelpStyle,
 	}
 }
 
@@ -62,6 +60,10 @@ func (m CommitInputModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc":
+			if m.embedded {
+				m.canceled = true
+				return m, nil
+			}
 			return m, tea.Quit
 
 		case "enter":
@@ -76,10 +78,13 @@ func (m CommitInputModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-	case commitCompleteMsg:
+	case CommitCompleteMsg:
 		m.committed = true
-		m.err = msg.error
-		if msg.success {
+		m.err = msg.Err
+		if m.embedded {
+			return m, nil
+		}
+		if msg.Success {
 			return m, tea.Quit
 		}
 
@@ -96,7 +101,7 @@ func (m CommitInputModel) View() string {
 		if m.err != nil {
 			return m.errorStyle.Render(fmt.Sprintf("Commit failed: %v", m.err)) + "\n"
 		}
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("46")).Render("Commit successful!") + "\n"
+		return StagedStyle.Render("Commit successful!") + "\n"
 	}
 
 	var sections []string
@@ -130,9 +135,9 @@ func (m CommitInputModel) commitWithMessage(message string) tea.Cmd {
 		} else {
 			err = m.repo.Commit(message)
 		}
-		return commitCompleteMsg{
-			success: err == nil,
-			error:   err,
+		return CommitCompleteMsg{
+			Success: err == nil,
+			Err:     err,
 		}
 	}
 }

@@ -43,14 +43,14 @@ func NewStatusViewerModel(repo *git.GitRepo) StatusViewerModel {
 	return StatusViewerModel{
 		repo: repo,
 
-		titleStyle:       lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true),
-		selectedStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("#F1D3AB")).Bold(true),
-		unselectedStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
-		activeTabStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true).Underline(true),
-		inactiveTabStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
-		helpStyle:        lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
-		stagedStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("46")),
-		unstagedStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("214")),
+		titleStyle:       TitlePinkStyle,
+		selectedStyle:    SelectedPeachStyle,
+		unselectedStyle:  UnselectedStyle,
+		activeTabStyle:   TitlePinkStyle.Underline(true),
+		inactiveTabStyle: UnselectedStyle,
+		helpStyle:        HelpStyle,
+		stagedStyle:      StagedStyle,
+		unstagedStyle:    UnstagedStyle,
 	}
 }
 
