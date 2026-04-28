@@ -111,9 +111,9 @@ func (repo *GitRepo) FileDiff(filePath string, staged bool) (string, error) {
 	// First try normal diff for modified files
 	var cmd *exec.Cmd
 	if staged {
-		cmd = exec.Command("git", "diff", "--staged", "--word-diff=color", filePath)
+		cmd = exec.Command("git", "diff", "--color=always", "--staged", filePath)
 	} else {
-		cmd = exec.Command("git", "diff", "--word-diff=color", filePath)
+		cmd = exec.Command("git", "diff", "--color=always", filePath)
 	}
 	cmd.Dir = repo.WorkDir
 
