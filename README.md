@@ -41,6 +41,7 @@ Built in Go with Cobra CLI and Charm TUI libraries for learning purposes.
 - Pop/apply/drop stashes interactively: `cgit pop`
 
 ### Utilities
+- Interactive shell with history and tab completion: `cgit shell`
 - Hard reset and clean working directory: `cgit full-clean` (or `cgit fc`)
 - Show/edit config: `cgit config`
 - Shell completions: `cgit completion --help`
@@ -65,7 +66,7 @@ Run `cgit config` to see the active config path and values.
 ## Installation
 
 ### Prerequisites
-- Go 1.21 or later
+- Go 1.25 or later
 
 ```bash
 go install "github.com/corpeningc/cgit@latest"
